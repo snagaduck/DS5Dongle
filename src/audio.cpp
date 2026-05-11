@@ -52,8 +52,8 @@ uint8_t state_data[63] = {
     0xff, 0xd7, 0x00, // RGB LED: R, G, B (Nijika Color!)✨
 };
 
-void set_state_data(const uint8_t* data, const uint8_t len) {
-    memcpy(state_data, data, len);
+void set_state_data(const uint8_t* data, uint16_t len) {
+    memcpy(state_data, data, std::min(len, (uint16_t)sizeof(state_data)));
 }
 
 void set_headset(bool state) {
@@ -86,7 +86,8 @@ void audio_loop() {
             static audio_raw_element element{};
             memcpy(element.data, audio_buf, 512 * 2 * 4);
             if (queue_is_full(&audio_fifo)) {
-                queue_try_remove(&audio_fifo,NULL);
+                static audio_raw_element discard{};
+                queue_try_remove(&audio_fifo, &discard);
             }
             if (!queue_try_add(&audio_fifo, &element)) {
                 printf("[Audio] Warning: audio_fifo add failed\n");

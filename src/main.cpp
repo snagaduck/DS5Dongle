@@ -144,10 +144,12 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
 
     std::vector<uint8_t> feature_data = get_feature_data(report_id, reqlen);
     if (!feature_data.empty()) {
-        memcpy(buffer, feature_data.data() + 1, feature_data.size() - 1);
+        uint16_t copy_len = std::min((uint16_t)(feature_data.size() - 1), reqlen);
+        memcpy(buffer, feature_data.data() + 1, copy_len);
+        return copy_len;
     }
 
-    return feature_data.empty() ? 0 : feature_data.size() - 1;
+    return 0;
 }
 
 bool tud_audio_set_itf_cb(uint8_t rhport, tusb_control_request_t const *p_request) {
@@ -195,10 +197,8 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
                 }
                 uint8_t outputData[78];
                 outputData[0] = 0x31;
-                outputData[1] = reportSeqCounter << 4;
-                if (++reportSeqCounter == 256) {
-                    reportSeqCounter = 0;
-                }
+                outputData[1] = (reportSeqCounter & 0x0F) << 4;
+                if (++reportSeqCounter >= 16) reportSeqCounter = 0;
                 outputData[2] = 0x10;
                 memcpy(outputData + 3, buffer + 1, bufsize - 1);
                 bt_write(outputData, sizeof(outputData));

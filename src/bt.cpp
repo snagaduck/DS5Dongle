@@ -535,15 +535,17 @@ vector<uint8_t> get_feature_data(uint8_t reportId, uint16_t len) {
 
 void set_feature_data(uint8_t reportId, uint8_t *data, uint16_t len) {
     if (hid_control_cid != 0) {
-        uint8_t get_feature[len + 2];
+        uint8_t get_feature[256];
+        const uint16_t total = len + 2;
+        if (total > sizeof(get_feature)) return;
         get_feature[0] = 0x53;
         get_feature[1] = reportId;
         memcpy(get_feature + 2, data, len);
         fill_feature_report_checksum(get_feature + 1, len + 1);
-        l2cap_send(hid_control_cid, get_feature, len + 2);
+        l2cap_send(hid_control_cid, get_feature, total);
 #if ENABLE_VERBOSE
         printf("[L2CAP] Requesting Set Feature Report 0x%02X\n", reportId);
-        printf_hexdump(get_feature, len + 2);
+        printf_hexdump(get_feature, total);
 #endif
     }
 }
