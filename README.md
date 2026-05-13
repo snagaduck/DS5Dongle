@@ -88,17 +88,15 @@ If your device fails to boot:
 - CMake 3.13+
 - `arm-none-eabi-gcc` toolchain
 
-### Required SDK patch
+### TinyUSB version
 
-TinyUSB 0.16 (bundled with Pico SDK 2.2.0) has a UAC2-only protocol check that rejects the dongle's UAC1 audio descriptor, preventing USB audio from enumerating on Windows. You must comment out one line before building:
+Pico SDK 2.2.0 ships with TinyUSB 0.16, which does not support UAC1 and will cause USB audio enumeration to fail on Windows. Update TinyUSB to 0.20.0 before building:
 
-In `~/.pico-sdk/sdk/2.2.0/lib/tinyusb/src/class/audio/audio_device.c`, around line 1576, comment out:
-
-```c
-// TU_VERIFY(itf_desc->bInterfaceProtocol == AUDIO_INT_PROTOCOL_CODE_V2);
+```bash
+cd ~/.pico-sdk/sdk/2.2.0/lib/tinyusb
+git fetch origin
+git checkout 0.20.0
 ```
-
-This patch must be reapplied if you reinstall or update the SDK.
 
 ### Build
 
