@@ -52,12 +52,7 @@ enum {
 #endif
     ITF_NUM_TOTAL,
 
-    CONFIG_DESC_LEN_AUDIO_IAD =
-#if ENABLE_SERIAL
-        8,
-#else
-        0,
-#endif
+    CONFIG_DESC_LEN_AUDIO_IAD = 8,  // IAD always present; TinyUSB audio driver requires it
     CONFIG_DESC_LEN_BASE = 0x00E3 + CONFIG_DESC_LEN_AUDIO_IAD,
     // Keyboard interface adds 25 bytes:
     //   9 (interface) + 9 (HID class) + 7 (EP IN) = 25
@@ -97,17 +92,10 @@ tusb_desc_device_t desc_device =
     .bcdUSB = 0x0200,
 #endif
 
-    // Use Interface Association Descriptor (IAD) for Audio
-    // As required by USB Specs IAD's subclass must be common class (2) and protocol must be IAD (1)
-#if ENABLE_SERIAL
+    // IAD always present; bDeviceClass=0xEF/0x02/0x01 required so usbccgp correctly groups interfaces
     .bDeviceClass = TUSB_CLASS_MISC,
     .bDeviceSubClass = MISC_SUBCLASS_COMMON,
     .bDeviceProtocol = MISC_PROTOCOL_IAD,
-#else
-    .bDeviceClass = 0x00,
-    .bDeviceSubClass = 0x00,
-    .bDeviceProtocol = 0x00,
-#endif
     .bMaxPacketSize0 = CFG_TUD_ENDPOINT0_SIZE,
 
     .idVendor = 0x054C,
@@ -147,7 +135,6 @@ uint8_t descriptor_configuration[] = {
 #endif
     0xFA, // bMaxPower: 500mA (250 * 2mA)
 
-#if ENABLE_SERIAL
     // --- INTERFACE ASSOCIATION DESCRIPTOR: Audio function (interfaces 0-2) ---
     0x08, // bLength
     TUSB_DESC_INTERFACE_ASSOCIATION, // bDescriptorType
@@ -158,7 +145,7 @@ uint8_t descriptor_configuration[] = {
     0x00, // bFunctionProtocol
     0x00, // iFunction
 
-#endif
+
     // --- INTERFACE DESCRIPTOR (0.0): Audio Control ---
     0x09, // bLength
     0x04, // bDescriptorType (INTERFACE)
