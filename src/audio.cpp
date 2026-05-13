@@ -61,7 +61,16 @@ void audio_loop() {
     WDL_ResampleSample *in_buf;
     int nframes = resampler.ResamplePrepare(frames, OUTPUT_CHANNELS, &in_buf);
 
-    const float audio_gain = mute[0] ? 0.0f : powf(10.0f, get_config().speaker_volume / 20.0f);
+    static uint8_t last_mute = 0xFF;
+    static float last_vol = 0.0f;
+    static float audio_gain = 0.0f;
+    const uint8_t cur_mute = mute[0];
+    const float cur_vol = get_config().speaker_volume;
+    if (cur_mute != last_mute || cur_vol != last_vol) {
+        last_mute = cur_mute;
+        last_vol = cur_vol;
+        audio_gain = cur_mute ? 0.0f : powf(10.0f, cur_vol / 20.0f);
+    }
     const float haptics_gain = get_config().haptics_gain;
     for (int i = 0; i < nframes; i++) {
  #if !DISABLE_SPEAKER_PROC       

@@ -104,7 +104,12 @@ target_include_directories(wdl_resampler PUBLIC
 add_subdirectory(lib/opus)
 
 target_compile_options(wdl_resampler PRIVATE -fsigned-char)
-target_compile_options(ds5-bridge PRIVATE -fsigned-char)
+target_compile_options(ds5-bridge PRIVATE
+        -fsigned-char
+        -ffast-math
+        -ffunction-sections
+        -fdata-sections
+)
 target_compile_definitions(wdl_resampler PRIVATE
         WDL_RESAMPLE_TYPE=float
 )
@@ -172,6 +177,8 @@ target_link_libraries(ds5-bridge
         wdl_resampler
         opus
 )
+
+target_link_options(ds5-bridge PRIVATE -Wl,--gc-sections)
 
 pico_add_extra_outputs(ds5-bridge)
 
