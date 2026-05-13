@@ -97,7 +97,7 @@ void audio_loop() {
 
     // 3. 48kHz -> 3kHz 重采样
     static WDL_ResampleSample out_buf[SAMPLE_SIZE]; // 64 floats = 32帧 × 2ch
-    const int out_frames = resampler.ResampleOut(out_buf, nframes, nframes / 4, OUTPUT_CHANNELS);
+    const int out_frames = resampler.ResampleOut(out_buf, nframes, nframes / 16, OUTPUT_CHANNELS);
 
     static int8_t haptic_buf[SAMPLE_SIZE];
     static int haptic_buf_pos = 0;
