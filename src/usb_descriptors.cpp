@@ -53,7 +53,7 @@ enum {
     ITF_NUM_TOTAL,
 
     CONFIG_DESC_LEN_AUDIO_IAD = 8,  // IAD always present; TinyUSB audio driver requires it
-    CONFIG_DESC_LEN_BASE = 0x00E3 + CONFIG_DESC_LEN_AUDIO_IAD,
+    CONFIG_DESC_LEN_BASE = 0x00E4 + CONFIG_DESC_LEN_AUDIO_IAD,
     // Keyboard interface adds 25 bytes:
     //   9 (interface) + 9 (HID class) + 7 (EP IN) = 25
     CONFIG_DESC_LEN_WAKE_KBD =
@@ -162,7 +162,7 @@ uint8_t descriptor_configuration[] = {
     0x24, // bDescriptorType: CS_INTERFACE (0x24)
     0x01, // bDescriptorSubtype: Header (0x01)
     0x00, 0x01, // bcdADC: 1.00
-    0x49, 0x00, // wTotalLength: 73 (0x0049)
+    0x4A, 0x00, // wTotalLength: 74 (0x004A)
     0x02, // bInCollection: 2 streaming interfaces
     0x01, // baInterfaceNr(1): Interface 1
     0x02, // baInterfaceNr(2): Interface 2
@@ -212,7 +212,7 @@ uint8_t descriptor_configuration[] = {
     0x00, // iTerminal: 0
 
     // Feature Unit Descriptor (Unit ID 5 ← from Terminal 4)
-    0x09, // bLength: 9
+    0x0A, // bLength: 10 = 7 + bControlSize*(nChannels+1) = 7 + 1*3
     0x24, // bDescriptorType: CS_INTERFACE
     0x06, // bDescriptorSubtype: Feature Unit
     0x05, // bUnitID: 5
@@ -220,6 +220,7 @@ uint8_t descriptor_configuration[] = {
     0x01, // bControlSize: 1
     0x03, // bmaControls[0]: Master – Mute, Volume
     0x00, // bmaControls[1]: Ch1 – no controls
+    0x00, // bmaControls[2]: Ch2 – no controls
     0x00, // iFeature: 0
 
     // Output Terminal Descriptor (Terminal ID 6: USB Streaming ← from Unit 5)

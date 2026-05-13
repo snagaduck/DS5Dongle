@@ -138,9 +138,9 @@
 #define CFG_TUD_AUDIO_FUNC_1_EP_OUT_SW_BUF_SZ       (3 * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX)
 #define CFG_TUD_AUDIO_FUNC_1_EP_IN_SW_BUF_SZ        (4 * CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX)
 
-// AC(82) + AS_OUT(52) + AS_IN(52) = 186. audiod_open always subtracts TUD_AUDIO_DESC_IAD_LEN(8)
+// AC(83) + AS_OUT(52) + AS_IN(52) = 187. audiod_open always subtracts TUD_AUDIO_DESC_IAD_LEN(8)
 // before returning drv_len, so we must always add 8 here regardless of whether an IAD is present.
-#define CFG_TUD_AUDIO_FUNC_1_DESC_LEN               (186 + 8)
+#define CFG_TUD_AUDIO_FUNC_1_DESC_LEN               (187 + 8)
 // 2 streaming interfaces: OUT (speaker) + IN (mic)
 #define CFG_TUD_AUDIO_FUNC_1_N_AS_INT               2
 // EP0 control buffer: large enough for a volume range request
