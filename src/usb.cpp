@@ -9,15 +9,6 @@
 uint8_t mute[2]; // 0: SPEAKER(0x02) 1: MIC(0x05)
 float volume[2] = {-100.0f,0.0f}; // 0: SPEAKER(0x02) 1: MIC(0x05)
 
-// UAC1 bRequest values removed from TinyUSB 0.16+ (UAC1 spec table 5-4)
-#define AUDIO10_CS_REQ_SET_CUR  0x01u
-#define AUDIO10_CS_REQ_GET_CUR  0x81u
-#define AUDIO10_CS_REQ_GET_MIN  0x82u
-#define AUDIO10_CS_REQ_GET_MAX  0x83u
-#define AUDIO10_CS_REQ_GET_RES  0x84u
-// UAC1 FU controls kept same values, just renamed in TinyUSB 0.16+
-#define AUDIO10_FU_CTRL_MUTE    AUDIO_FU_CTRL_MUTE
-#define AUDIO10_FU_CTRL_VOLUME  AUDIO_FU_CTRL_VOLUME
 
 #define UAC1_ENTITY_SPK_FEATURE_UNIT    0x02
 #define UAC1_ENTITY_MIC_FEATURE_UNIT    0x05
