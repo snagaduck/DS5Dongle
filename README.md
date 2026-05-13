@@ -66,7 +66,6 @@ To opt out at build time, configure with `-DENABLE_BATT_LED=OFF`. Default is ON.
 ## Known Issues
 
 - ⚠️ Audio may experience slight stuttering
-- ⚠️ Overclocking is required for proper performance
 
 ## Performance / Overclocking
 
@@ -83,10 +82,47 @@ If your device fails to boot:
 
 ## Build Instructions
 
-To build the project from source:
+### Prerequisites
 
-1. Update TinyUSB in the Pico SDK to the latest version
-2. Compile using standard Pico SDK toolchain
+- [Pico SDK 2.2.0](https://github.com/raspberrypi/pico-sdk/releases/tag/2.2.0) (other versions not tested)
+- CMake 3.13+
+- `arm-none-eabi-gcc` toolchain
+
+### Required SDK patch
+
+TinyUSB 0.16 (bundled with Pico SDK 2.2.0) has a UAC2-only protocol check that rejects the dongle's UAC1 audio descriptor, preventing USB audio from enumerating on Windows. You must comment out one line before building:
+
+In `~/.pico-sdk/sdk/2.2.0/lib/tinyusb/src/class/audio/audio_device.c`, around line 1576, comment out:
+
+```c
+// TU_VERIFY(itf_desc->bInterfaceProtocol == AUDIO_INT_PROTOCOL_CODE_V2);
+```
+
+This patch must be reapplied if you reinstall or update the SDK.
+
+### Build
+
+```bash
+git clone --recurse-submodules https://github.com/snagaduck/DS5Dongle.git
+cd DS5Dongle
+mkdir build && cd build
+cmake ..
+make -j$(nproc)
+```
+
+The `.uf2` file will be in `build/ds5-bridge.uf2`.
+
+### CMake options
+
+| Option | Default | Description |
+|---|---|---|
+| `ENABLE_WAKE_HID` | `OFF` | Add HID keyboard interface to wake PC from S3 sleep on button press |
+| `ENABLE_BATT_LED` | `ON` | Blink onboard LED when controller battery ≤ 10% |
+| `ENABLE_SERIAL` | `OFF` | Enable USB CDC serial port for debug output |
+| `DISABLE_SPEAKER_PROC` | `OFF` | Disable speaker audio processing (haptics only) |
+| `SYS_CLOCK_KHZ` | `320000` | CPU frequency in kHz |
+
+Example: `cmake .. -DENABLE_WAKE_HID=ON`
 
 ## Wake-on-PS (optional)
 
