@@ -17,8 +17,8 @@
 #include "config.h"
 #include "pico/util/queue.h"
 
-#define MTU_CONTROL 256
-#define MTU_INTERRUPT 1691
+#define MTU_CONTROL 672
+#define MTU_INTERRUPT 672
 
 using std::unordered_map;
 using std::vector;
@@ -39,6 +39,7 @@ static bt_data_callback_t bt_data_callback = nullptr;
 static bool check_dse = false;
 unordered_map<uint8_t, vector<uint8_t> > feature_data;
 queue_t send_fifo;
+queue_t priority_send_fifo;
 
 struct send_element {
     uint8_t data[512];
@@ -86,6 +87,7 @@ void bt_l2cap_init() {
 
 int bt_init() {
     queue_init(&send_fifo, sizeof(send_element), 10);
+    queue_init(&priority_send_fifo, sizeof(send_element), 10);
 
     bt_l2cap_init();
 
@@ -393,6 +395,9 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                 if (psm == PSM_HID_CONTROL) {
                     printf("[L2CAP] HID Control opened cid=0x%04X\n", local_cid);
                     hid_control_cid = local_cid;
+
+                    const auto mtu = l2cap_get_remote_mtu_for_local_cid(hid_control_cid);
+                    printf("[L2CAP] Remote Control MTU: %d\n",mtu);
                 } else if (psm == PSM_HID_INTERRUPT) {
                     printf("[L2CAP] HID Interrupt opened cid=0x%04X\n", local_cid);
                     hid_interrupt_cid = local_cid;
@@ -426,6 +431,9 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                     };
                     memcpy(report32 + 2, packet_0x10, sizeof(packet_0x10));
                     bt_write(report32, sizeof(report32));
+
+                    const auto mtu = l2cap_get_remote_mtu_for_local_cid(hid_interrupt_cid);
+                    printf("[L2CAP] Remote Interrupt MTU: %d\n",mtu);
 
                     // tud_connect();
                 } else {
@@ -475,14 +483,20 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
         case L2CAP_EVENT_CAN_SEND_NOW: {
             // printf("[L2CAP] L2CAP_EVENT_CAN_SEND_NOW\n");
 
-            static send_element send_packet{};
-            if (queue_try_remove(&send_fifo, &send_packet)) {
+            send_element send_packet{};
+            bool get_data = false;
+            if (!queue_is_empty(&priority_send_fifo)) {
+                get_data = queue_try_remove(&priority_send_fifo, &send_packet);
+            }else {
+                get_data = queue_try_remove(&send_fifo, &send_packet);
+            }
+            if (get_data) {
                 const uint8_t status = l2cap_send(hid_interrupt_cid, send_packet.data, send_packet.len);
                 if (status != 0) {
                     printf("[L2CAP] L2CAP Send Error, Status: 0x%02X\n", status);
                 }
             }
-            if (!queue_is_empty(&send_fifo)) {
+            if (!queue_is_empty(&priority_send_fifo) || !queue_is_empty(&send_fifo)) {
                 l2cap_request_can_send_now_event(hid_interrupt_cid);
             }
             break;
@@ -490,7 +504,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
     }
 }
 
-void bt_write(uint8_t *data, uint16_t len) {
+void bt_write(const uint8_t *data, const uint16_t len, const bool priority) {
     if (hid_interrupt_cid == 0) return;
     static send_element packet{};
     memset(packet.data, 0, 512);
@@ -499,11 +513,18 @@ void bt_write(uint8_t *data, uint16_t len) {
     memcpy(packet.data + 1, data, len);
     fill_output_report_checksum(packet.data + 1, len);
 
-    if (!queue_try_add(&send_fifo, &packet)) {
-        printf("[L2CAP bt_write] Error: Failed to add packet to send FIFO\n");
-        return;
+    if (priority) {
+        if (!queue_try_add(&priority_send_fifo, &packet)) {
+            printf("[L2CAP bt_write] Error: Failed to add packet to priority send FIFO\n");
+            return;
+        }
+    }else {
+        if (!queue_try_add(&send_fifo, &packet)) {
+            printf("[L2CAP bt_write] Error: Failed to add packet to send FIFO\n");
+            return;
+        }
     }
-    if (queue_get_level(&send_fifo) == 1) {
+    if (queue_get_level(&send_fifo) + queue_get_level(&priority_send_fifo) == 1) {
         l2cap_request_can_send_now_event(hid_interrupt_cid);
     }
 }
