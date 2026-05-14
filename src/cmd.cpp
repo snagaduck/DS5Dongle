@@ -56,12 +56,10 @@ void pico_cmd_set(uint8_t report_id, uint8_t const *buffer, uint16_t bufsize) {
     if (buffer[0] == 0x01) {
         printf("[CMD] Enter config set func\n");
         set_config(buffer + 1, bufsize - 1);
-    }
-    if (buffer[0] == 0x02) {
+    } else if (buffer[0] == 0x02) {
         printf("[CMD] Enter config save func\n");
         config_save();
-    }
-    if (buffer[0] == 0x03) {
+    } else if (buffer[0] == 0x03) {
         printf("[CMD] Enter tud reconnect func\n");
         tud_disconnect();
         reconnect_at = make_timeout_time_ms(150);

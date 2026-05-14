@@ -49,11 +49,11 @@ void set_headset(bool state) {
 }
 
 void audio_loop() {
-    // 1. 读取 USB 音频数据
+    // 1. read USB audio data
     if (!tud_audio_available()) return;
 
     int16_t raw[192];
-    uint32_t bytes_read = tud_audio_read(raw, sizeof(raw)); // 每次读入 384 bytes
+    uint32_t bytes_read = tud_audio_read(raw, sizeof(raw)); // 384 bytes per call
     int frames = bytes_read / (INPUT_CHANNELS * sizeof(int16_t));
     if (frames == 0) {
         return;
@@ -61,7 +61,7 @@ void audio_loop() {
 
     static float audio_buf[512 * 2];
     static uint audio_buf_pos = 0;
-    // 2. 从4ch中提取ch3/ch4，转换为float输入重采样器
+    // 2. extract ch3/ch4 from 4-ch input and convert to float for the resampler
     WDL_ResampleSample *in_buf;
     int nframes = resampler.ResamplePrepare(frames, OUTPUT_CHANNELS, &in_buf);
 
@@ -104,18 +104,18 @@ void audio_loop() {
 
     haptic_filter_process(raw, frames, INPUT_CHANNELS, in_buf, nframes, OUTPUT_CHANNELS);
 
-    // 3. 48kHz -> 3kHz 重采样
-    static WDL_ResampleSample out_buf[SAMPLE_SIZE]; // 64 floats = 32帧 × 2ch
+    // 3. resample 48kHz -> 3kHz (16:1 ratio)
+    static WDL_ResampleSample out_buf[SAMPLE_SIZE]; // 64 floats = 32 frames × 2ch
     const int out_frames = resampler.ResampleOut(out_buf, nframes, nframes / 16, OUTPUT_CHANNELS);
 
     static int8_t haptic_buf[SAMPLE_SIZE];
     static int haptic_buf_pos = 0;
 
-    // 4. 转换为int8并缓冲，满64字节即组包发送
+    // 4. convert to int8 and accumulate; emit a packet once the buffer is full
     for (int i = 0; i < out_frames; i++) {
         int val_l = static_cast<int>(out_buf[i * 2] * 127.0f);
         int val_r = static_cast<int>(out_buf[i * 2 + 1] * 127.0f);
-        haptic_buf[haptic_buf_pos++] = (int8_t) clamp(val_l, -128, 127); // 似乎clamp有点多余？还是以防万一吧
+        haptic_buf[haptic_buf_pos++] = (int8_t) clamp(val_l, -128, 127);
         haptic_buf[haptic_buf_pos++] = (int8_t) clamp(val_r, -128, 127);
 
         if (haptic_buf_pos != SAMPLE_SIZE) {
@@ -149,8 +149,8 @@ void audio_loop() {
         pkt[5] = buf_len;
         pkt[6] = buf_len;
         pkt[7] = buf_len;
-        pkt[8] = buf_len; // 这 4 个字节的作用未知，调整没有效果
-        pkt[9] = buf_len; // audio buffer length 只有调整这个字节生效。
+        pkt[8] = buf_len; // bytes 5-8: purpose unknown; adjusting has no observable effect
+        pkt[9] = buf_len; // byte 9: audio buffer length — only this byte has an observable effect
         pkt[10] = packetCounter++;
         pkt[11] = 0x12 | 0 << 6 | 1 << 7;
         pkt[12] = haptic_silent ? 0 : SAMPLE_SIZE;

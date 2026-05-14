@@ -361,7 +361,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
             // printf_hexdump(packet, size);
             bt_data_callback(INTERRUPT, packet, size);
 
-            // 静默检测
+            // controller inactivity detection
             if (get_config().disable_inactive_disconnect) {
                 return;
             }
@@ -399,7 +399,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
 #endif
                 }
             }
-            if (packet[0] == 0xA3) {
+            if (packet[0] == 0xA3 && size >= 2) {
                 uint8_t report_id = packet[1];
                 feature_data[report_id].assign(packet + 1, packet + size);
 #if ENABLE_VERBOSE
