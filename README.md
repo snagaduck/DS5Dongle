@@ -122,6 +122,23 @@ The `.uf2` file will be in `build/ds5-bridge.uf2`.
 
 Example: `cmake .. -DENABLE_WAKE_HID=ON`
 
+## Haptic audio filter (optional)
+
+The dongle routes USB audio channels 3/4 directly to the DualSense haptic actuators (LRAs). The LRAs respond most strongly to frequencies below ~400Hz — high-frequency content above that range feels like electrical noise rather than haptic sensation.
+
+An optional 2nd-order Butterworth low-pass filter (300Hz cutoff, −12dB/octave rolloff) is included but inactive by default. To enable it:
+
+1. Rename `src/haptic_filter.cpp.disabled` → `src/haptic_filter.cpp`
+2. Re-run cmake from your build directory:
+   ```bash
+   cmake ..
+   cmake --build . --parallel
+   ```
+
+To deactivate, rename the file back to `.disabled` and re-run cmake. When inactive the build is identical to the unfiltered version — there is no runtime overhead.
+
+**Using game audio as haptics:** The dongle appears to Windows as a 4-channel audio device. Routing game audio to channels 3/4 (e.g. via VoiceMeeter Banana) will drive the haptic actuators directly from whatever is playing. With the filter enabled, only the bass/impact frequencies reach the controller, which generally feels more natural.
+
 ## Wake-on-PS (optional)
 
 A `-DENABLE_WAKE_HID=ON` build adds a second HID interface (a boot keyboard) that injects an **F15** keypress when any controller button is pressed while the host is suspended, waking the PC from **S3 sleep**. F15 was chosen because it has no default Windows or app binding — a stray fire never inserts characters or triggers shortcuts.
