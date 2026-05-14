@@ -71,32 +71,6 @@ constexpr uint8_t BT_BEAMFORMING = 1;
 // 0=Off, 1=On, 2=Breathing
 constexpr uint8_t BT_MUTE_LIGHT = 0x00;
 
-// ─── Derived BT init values ────────────────────────────────────────────────
-// Computed from settings above. Edit the primitives, not these.
-
-// AudioControl byte (SD[7]): mic source, echo/noise cancel, I/O path routing.
-// MicSelect=01 (Internal), OutputPathSelect=00 (L_R_X stereo), InputPathSelect=00 (CHAT_ASR).
-constexpr uint8_t BT_AUDIO_CONTROL = static_cast<uint8_t>(
-    0x01                        // MicSelect = Internal Only (bits 0-1)
-    | (BT_ECHO_CANCEL  << 2)    // EchoCancelEnable  (bit 2)
-    | (BT_NOISE_CANCEL << 3)    // NoiseCancelEnable (bit 3)
-);
-
-// AudioControl2 byte (SD[37]): speaker compression pre-gain and mic beamforming.
-constexpr uint8_t BT_AUDIO_CONTROL2 = static_cast<uint8_t>(
-    (BT_SPEAKER_COMP_PREGAIN & 0x07) // SpeakerCompPreGain (bits 0-2)
-    | (BT_BEAMFORMING << 3)          // BeamformingEnable  (bit 3)
-);
-
-// MuteControl byte (SD[9]): per-subsystem mute and power-save flags.
-// DISABLE_SPEAKER_PROC builds don't use the controller speaker at all,
-// so mute it and disable audio power to avoid unnecessary processing.
-#if DISABLE_SPEAKER_PROC
-constexpr uint8_t BT_MUTE_CONTROL = 0x28; // SpeakerMute (bit 5) | AudioPowerSave (bit 3)
-#else
-constexpr uint8_t BT_MUTE_CONTROL = 0x00;
-#endif
-
 // ─── Controller-type BT init ───────────────────────────────────────────────
 // Per-type overrides applied after controller identity (DS5 vs DSE) is confirmed.
 // Both inherit the shared values above by default; change here to diverge.

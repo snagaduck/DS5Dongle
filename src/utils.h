@@ -249,6 +249,76 @@ struct __attribute__((packed)) USBGetStateData { // 63
 /*55  */ uint8_t AesCmac[8];
 };
 
+struct __attribute__((packed)) SetStateData { // 47
+/* 0.0 */ uint8_t EnableRumbleEmulation        : 1;
+/* 0.1 */ uint8_t UseRumbleNotHaptics           : 1;
+/* 0.2 */ uint8_t AllowRightTriggerFFB          : 1;
+/* 0.3 */ uint8_t AllowLeftTriggerFFB           : 1;
+/* 0.4 */ uint8_t AllowHeadphoneVolume          : 1;
+/* 0.5 */ uint8_t AllowSpeakerVolume            : 1;
+/* 0.6 */ uint8_t AllowMicVolume                : 1;
+/* 0.7 */ uint8_t AllowAudioControl             : 1;
+
+/* 1.0 */ uint8_t AllowMuteLight                : 1;
+/* 1.1 */ uint8_t AllowAudioMute                : 1;
+/* 1.2 */ uint8_t AllowLedColor                 : 1; // Enable RGB LED section
+/* 1.3 */ uint8_t ResetLights                   : 1; // Release LEDs from BT firmware control.
+                                                      // Must be pulsed once after SensorTimestamp
+                                                      // >= 10200000 before AllowLedColor takes effect.
+                                                      // Cannot be applied during the BT pair animation.
+/* 1.4 */ uint8_t AllowPlayerIndicators         : 1;
+/* 1.5 */ uint8_t AllowHapticLowPassFilter      : 1;
+/* 1.6 */ uint8_t AllowMotorPowerLevel          : 1;
+/* 1.7 */ uint8_t AllowAudioControl2            : 1;
+
+/*  2 */ uint8_t  RumbleEmulationRight;
+/*  3 */ uint8_t  RumbleEmulationLeft;
+/*  4 */ uint8_t  VolumeHeadphones;
+/*  5 */ uint8_t  VolumeSpeaker;
+/*  6 */ uint8_t  VolumeMic;
+
+/* 7.0 */ uint8_t MicSelect                     : 2;
+/* 7.2 */ uint8_t EchoCancelEnable              : 1;
+/* 7.3 */ uint8_t NoiseCancelEnable             : 1;
+/* 7.4 */ uint8_t OutputPathSelect              : 2;
+/* 7.6 */ uint8_t InputPathSelect               : 2;
+
+/*  8 */ uint8_t  MuteLightMode;
+
+/* 9.0 */ uint8_t TouchPowerSave                : 1;
+/* 9.1 */ uint8_t MotionPowerSave               : 1;
+/* 9.2 */ uint8_t HapticPowerSave               : 1;
+/* 9.3 */ uint8_t AudioPowerSave                : 1;
+/* 9.4 */ uint8_t MicMuted                      : 1;
+/* 9.5 */ uint8_t SpeakerMuted                  : 1;
+/* 9.6 */ uint8_t HeadphonesMuted               : 1;
+/* 9.7 */ uint8_t Pad0                          : 1;
+
+/* 10 */ uint8_t  RightTriggerFFB[11];
+/* 21 */ uint8_t  LeftTriggerFFB[11];
+/* 32 */ uint32_t HostTimestamp;
+/* 36 */ uint8_t  MotorPowerLevel;
+
+/* 37.0 */ uint8_t SpeakerCompPreGain           : 3;
+/* 37.3 */ uint8_t BeamformingEnable            : 1;
+/* 37.4 */ uint8_t Pad1                         : 4;
+
+/* 38.0 */ uint8_t AllowLightBrightness         : 1;
+/* 38.1 */ uint8_t AllowColorLightFadeAnimation  : 1;
+/* 38.2 */ uint8_t EnableImprovedRumble         : 1;
+/* 38.3 */ uint8_t Pad2                         : 5;
+
+/* 39 */ uint8_t  HapticLowPassFilter;
+/* 40 */ uint8_t  Pad3;
+/* 41 */ uint8_t  LightFadeAnimation;
+/* 42 */ uint8_t  LightBrightness;
+/* 43 */ uint8_t  PlayerIndicators;
+/* 44 */ uint8_t  LedRed;
+/* 45 */ uint8_t  LedGreen;
+/* 46 */ uint8_t  LedBlue;
+};
+static_assert(sizeof(SetStateData) == 47);
+
 inline void print_hex(const uint8_t* data,size_t size) {
     for (int i = 0; i < size; i++) {
         std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]) << " ";
