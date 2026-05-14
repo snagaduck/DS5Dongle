@@ -75,6 +75,31 @@ project(ds5-bridge C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+# TinyUSB version detection — compute DS5_TUSB_VERSION = MAJOR*10000 + MINOR*100
+file(READ "${PICO_SDK_PATH}/lib/tinyusb/src/tusb_option.h" _tusb_h)
+string(REGEX MATCH "#define TUSB_VERSION_MAJOR +([0-9]+)" _ "${_tusb_h}")
+set(_tusb_major "${CMAKE_MATCH_1}")
+string(REGEX MATCH "#define TUSB_VERSION_MINOR +([0-9]+)" _ "${_tusb_h}")
+set(_tusb_minor "${CMAKE_MATCH_1}")
+math(EXPR DS5_TUSB_VERSION "${_tusb_major} * 10000 + ${_tusb_minor} * 100")
+message(STATUS "TinyUSB ${_tusb_major}.${_tusb_minor}.x detected  (DS5_TUSB_VERSION=${DS5_TUSB_VERSION})")
+
+if(DS5_TUSB_VERSION LESS 2000)
+    message(STATUS "TinyUSB < 0.20: applying UAC1 protocol patch to audio_device.c")
+    set(_audio_dev "${PICO_SDK_PATH}/lib/tinyusb/src/class/audio/audio_device.c")
+    file(READ "${_audio_dev}" _adc)
+    if("${_adc}" MATCHES "TU_VERIFY\\(itf_desc->bInterfaceProtocol == AUDIO_INT_PROTOCOL_CODE_V2\\);")
+        string(REPLACE
+            "TU_VERIFY(itf_desc->bInterfaceProtocol == AUDIO_INT_PROTOCOL_CODE_V2);"
+            "// TU_VERIFY(itf_desc->bInterfaceProtocol == AUDIO_INT_PROTOCOL_CODE_V2); // DS5Dongle UAC1 patch"
+            _adc "${_adc}")
+        file(WRITE "${_audio_dev}" "${_adc}")
+        message(STATUS "  -> audio_device.c patched")
+    else()
+        message(STATUS "  -> audio_device.c already patched, skipping")
+    endif()
+endif()
+
 # Add executable. Default name is the project name, version 0.1
 
 add_executable(ds5-bridge
@@ -114,6 +139,7 @@ target_compile_definitions(wdl_resampler PRIVATE
         WDL_RESAMPLE_TYPE=float
 )
 target_compile_definitions(ds5-bridge PRIVATE
+        DS5_TUSB_VERSION=${DS5_TUSB_VERSION}
         CYW43_LWIP=0
         ENABLE_SERIAL=${ENABLE_SERIAL_VALUE}
         PICO_FLASH_ASSUME_CORE1_SAFE=1
