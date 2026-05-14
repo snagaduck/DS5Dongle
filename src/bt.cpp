@@ -330,7 +330,7 @@ static void send_bt_init(const bool dse) {
     const uint8_t pkt[] = {
         0x90, 0x3f,
         // SetStateData
-        0xfd, 0xff, 0x00, 0x00,           // flags1, flags2, RumbleEmulation R/L
+        0xfd, 0xf7, 0x00, 0x00,           // flags1, flags2 (bit3=RELEASE_LEDS must be 0), RumbleEmulation R/L
         BT_VOLUME_HEADPHONES, BT_VOLUME_SPEAKER,
         BT_VOLUME_MIC,    BT_AUDIO_CONTROL,
         BT_MUTE_LIGHT,    BT_MUTE_CONTROL,
