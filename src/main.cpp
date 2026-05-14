@@ -193,6 +193,9 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
                 if (++out_report_seq >= 16) out_report_seq = 0;
                 memcpy(outputData + 2, buffer + 1, bufsize - 1);
                 bt_write(outputData, sizeof(outputData));
+                // SetStateData[2/3] = RumbleEmulationRight/Left (buffer[3/4])
+                if (bufsize > 4)
+                    notify_rumble(buffer[4], buffer[3]);
                 break;
             }
         }

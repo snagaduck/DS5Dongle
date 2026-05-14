@@ -13,6 +13,7 @@
 #include "usb.h"
 #include "pico/multicore.h"
 #include "pico/util/queue.h"
+#include "pico/time.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -35,6 +36,7 @@ static volatile bool core1_healthy = false;
 static uint8_t reportSeqCounter = 0;
 static uint8_t packetCounter = 0;
 static bool plug_headset = false;
+static absolute_time_t rumble_mute_until = 0;
 alignas(8) static uint32_t audio_core1_stack[8192];
 queue_t audio_fifo;
 static uint8_t opus_buf[200];
@@ -46,6 +48,11 @@ struct audio_raw_element {
 
 void set_headset(bool state) {
     plug_headset = state;
+}
+
+void notify_rumble(uint8_t left, uint8_t right) {
+    if (left > 0 || right > 0)
+        rumble_mute_until = make_timeout_time_ms(80);
 }
 
 void audio_loop() {
@@ -132,8 +139,11 @@ void audio_loop() {
         bool haptic_silent = true;
         for (int j = 0; j < SAMPLE_SIZE && haptic_silent; j++)
             haptic_silent = (haptic_buf[j] >= -1 && haptic_buf[j] <= 1);
+
+        const bool rumble_muting = get_config().haptic_yield_to_rumble &&
+                                   !time_reached(rumble_mute_until);
 #if DISABLE_SPEAKER_PROC
-        if (haptic_silent) {
+        if (haptic_silent || rumble_muting) {
             haptic_buf_pos = 0;
             continue;
         }
@@ -153,8 +163,9 @@ void audio_loop() {
         pkt[9] = buf_len; // byte 9: audio buffer length — only this byte has an observable effect
         pkt[10] = packetCounter++;
         pkt[11] = 0x12 | 0 << 6 | 1 << 7;
-        pkt[12] = haptic_silent ? 0 : SAMPLE_SIZE;
-        if (!haptic_silent)
+        const bool haptic_active = !haptic_silent && !rumble_muting;
+        pkt[12] = haptic_active ? SAMPLE_SIZE : 0;
+        if (haptic_active)
             memcpy(pkt + 13, haptic_buf, SAMPLE_SIZE);
 #if !DISABLE_SPEAKER_PROC
         pkt[77] = (plug_headset ? 0x16 : 0x13) | 0 << 6 | 1 << 7; // Speaker: 0x13

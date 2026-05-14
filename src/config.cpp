@@ -77,6 +77,10 @@ void config_valid() {
         body->controller_mode = DEFAULT_CONTROLLER_MODE;
         printf("[Config] controller_mode is invalid\n");
     }
+    if (body->haptic_yield_to_rumble > 1) {
+        body->haptic_yield_to_rumble = DEFAULT_HAPTIC_YIELD_RUMBLE;
+        printf("[Config] haptic_yield_to_rumble is invalid\n");
+    }
 }
 
 void config_load() {
