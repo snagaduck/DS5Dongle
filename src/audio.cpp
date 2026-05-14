@@ -117,6 +117,17 @@ void audio_loop() {
         if (haptic_buf_pos != SAMPLE_SIZE) {
             continue;
         }
+        // Skip silent packets so the controller's own haptic events
+        // (profile switch, trigger effects) aren't overwritten by zeros.
+        {
+            bool has_signal = false;
+            for (int j = 0; j < SAMPLE_SIZE && !has_signal; j++)
+                has_signal = haptic_buf[j] != 0;
+            if (!has_signal) {
+                haptic_buf_pos = 0;
+                continue;
+            }
+        }
         uint8_t pkt[REPORT_SIZE]{};
         pkt[0] = REPORT_ID;
         pkt[1] = reportSeqCounter << 4;
