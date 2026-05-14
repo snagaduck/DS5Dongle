@@ -117,20 +117,21 @@ void audio_loop() {
         if (haptic_buf_pos != SAMPLE_SIZE) {
             continue;
         }
-        // Skip silent haptic packets so the controller's own haptic events
-        // (profile switch, trigger effects) aren't overwritten by zeros.
-        // Only safe when speaker processing is disabled: the 0x36 packet
-        // also carries opus speaker audio, so we must not drop it when
-        // speaker proc is active even if the haptic channels are silent.
+        // Silence gate: treat haptic payload as silent when all samples are
+        // within ±1/127 (~0.8%) to filter USB audio dithering noise.
+        // Without this, the constant 0x36 stream (started by our USB audio
+        // enumeration fix) overrides HID haptic commands (0x31) from games
+        // even when no haptic audio is routed to the device.
+        // DISABLE_SPEAKER_PROC: drop the packet so controller-native haptics fire.
+        // Full build: send with haptic length = 0 so the controller skips the
+        // haptic payload but still receives the Opus speaker audio.
+        bool haptic_silent = true;
+        for (int j = 0; j < SAMPLE_SIZE && haptic_silent; j++)
+            haptic_silent = (haptic_buf[j] >= -1 && haptic_buf[j] <= 1);
 #if DISABLE_SPEAKER_PROC
-        {
-            bool has_signal = false;
-            for (int j = 0; j < SAMPLE_SIZE && !has_signal; j++)
-                has_signal = haptic_buf[j] != 0;
-            if (!has_signal) {
-                haptic_buf_pos = 0;
-                continue;
-            }
+        if (haptic_silent) {
+            haptic_buf_pos = 0;
+            continue;
         }
 #endif
         uint8_t pkt[REPORT_SIZE]{};
@@ -148,8 +149,9 @@ void audio_loop() {
         pkt[9] = buf_len; // audio buffer length 只有调整这个字节生效。
         pkt[10] = packetCounter++;
         pkt[11] = 0x12 | 0 << 6 | 1 << 7;
-        pkt[12] = SAMPLE_SIZE;
-        memcpy(pkt + 13, haptic_buf, SAMPLE_SIZE);
+        pkt[12] = haptic_silent ? 0 : SAMPLE_SIZE;
+        if (!haptic_silent)
+            memcpy(pkt + 13, haptic_buf, SAMPLE_SIZE);
 #if !DISABLE_SPEAKER_PROC
         pkt[77] = (plug_headset ? 0x16 : 0x13) | 0 << 6 | 1 << 7; // Speaker: 0x13
         // L Headset Mono: 0x14
