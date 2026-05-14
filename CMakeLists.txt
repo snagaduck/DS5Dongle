@@ -67,8 +67,6 @@ else ()
         set(SYS_CLOCK_KHZ_VALUE 320000)
 endif ()
 
-
-
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 
@@ -76,6 +74,31 @@ project(ds5-bridge C CXX ASM)
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
+
+# TinyUSB version detection — compute DS5_TUSB_VERSION = MAJOR*10000 + MINOR*100
+file(READ "${PICO_SDK_PATH}/lib/tinyusb/src/tusb_option.h" _tusb_h)
+string(REGEX MATCH "#define TUSB_VERSION_MAJOR +([0-9]+)" _ "${_tusb_h}")
+set(_tusb_major "${CMAKE_MATCH_1}")
+string(REGEX MATCH "#define TUSB_VERSION_MINOR +([0-9]+)" _ "${_tusb_h}")
+set(_tusb_minor "${CMAKE_MATCH_1}")
+math(EXPR DS5_TUSB_VERSION "${_tusb_major} * 10000 + ${_tusb_minor} * 100")
+message(STATUS "TinyUSB ${_tusb_major}.${_tusb_minor}.x detected  (DS5_TUSB_VERSION=${DS5_TUSB_VERSION})")
+
+if(DS5_TUSB_VERSION LESS 2000)
+    message(STATUS "TinyUSB < 0.20: applying UAC1 protocol patch to audio_device.c")
+    set(_audio_dev "${PICO_SDK_PATH}/lib/tinyusb/src/class/audio/audio_device.c")
+    file(READ "${_audio_dev}" _adc)
+    if("${_adc}" MATCHES "TU_VERIFY\\(itf_desc->bInterfaceProtocol == AUDIO_INT_PROTOCOL_CODE_V2\\);")
+        string(REPLACE
+            "TU_VERIFY(itf_desc->bInterfaceProtocol == AUDIO_INT_PROTOCOL_CODE_V2);"
+            "// TU_VERIFY(itf_desc->bInterfaceProtocol == AUDIO_INT_PROTOCOL_CODE_V2); // DS5Dongle UAC1 patch"
+            _adc "${_adc}")
+        file(WRITE "${_audio_dev}" "${_adc}")
+        message(STATUS "  -> audio_device.c patched")
+    else()
+        message(STATUS "  -> audio_device.c already patched, skipping")
+    endif()
+endif()
 
 # Add executable. Default name is the project name, version 0.1
 
@@ -106,11 +129,17 @@ target_include_directories(wdl_resampler PUBLIC
 add_subdirectory(lib/opus)
 
 target_compile_options(wdl_resampler PRIVATE -fsigned-char)
-target_compile_options(ds5-bridge PRIVATE -fsigned-char)
+target_compile_options(ds5-bridge PRIVATE
+        -fsigned-char
+        -ffast-math
+        -ffunction-sections
+        -fdata-sections
+)
 target_compile_definitions(wdl_resampler PRIVATE
         WDL_RESAMPLE_TYPE=float
 )
 target_compile_definitions(ds5-bridge PRIVATE
+        DS5_TUSB_VERSION=${DS5_TUSB_VERSION}
         CYW43_LWIP=0
         ENABLE_SERIAL=${ENABLE_SERIAL_VALUE}
         PICO_FLASH_ASSUME_CORE1_SAFE=1
@@ -125,6 +154,12 @@ target_compile_definitions(ds5-bridge PRIVATE
         DISABLE_SPEAKER_PROC=${DISABLE_SPEAKER_PROC_VALUE}
 )
 
+# Haptic LPF: rename src/haptic_filter.cpp.disabled -> src/haptic_filter.cpp to activate
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/src/haptic_filter.cpp)
+    message(STATUS "Haptic low-pass filter enabled")
+    target_sources(ds5-bridge PRIVATE src/haptic_filter.cpp)
+endif()
+
 option(ENABLE_WAKE_HID "Wake the Windows host on PS-button press" OFF)
 if(ENABLE_WAKE_HID)
     target_compile_definitions(ds5-bridge PRIVATE
@@ -136,6 +171,7 @@ if(ENABLE_WAKE_HID)
 endif()
 
 option(WAKE_DEBUG "Print wake-FSM transitions to UART (developer use)" OFF)
+
 if(WAKE_DEBUG)
     target_compile_definitions(ds5-bridge PRIVATE
             WAKE_DEBUG
@@ -174,6 +210,8 @@ target_link_libraries(ds5-bridge
         wdl_resampler
         opus
 )
+
+target_link_options(ds5-bridge PRIVATE -Wl,--gc-sections)
 
 pico_add_extra_outputs(ds5-bridge)
 

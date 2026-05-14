@@ -6,38 +6,29 @@
 #include "bsp/board_api.h"
 #include "config.h"
 
+// TinyUSB 0.20+ defines these natively; backfill for 0.16.
+#if TUSB_VERSION_NUMBER < 2000
+#define AUDIO10_CS_REQ_SET_CUR  0x01u
+#define AUDIO10_CS_REQ_GET_CUR  0x81u
+#define AUDIO10_CS_REQ_GET_MIN  0x82u
+#define AUDIO10_CS_REQ_GET_MAX  0x83u
+#define AUDIO10_CS_REQ_GET_RES  0x84u
+#define AUDIO10_FU_CTRL_MUTE    AUDIO_FU_CTRL_MUTE
+#define AUDIO10_FU_CTRL_VOLUME  AUDIO_FU_CTRL_VOLUME
+#endif
+
 uint8_t mute[2]; // 0: SPEAKER(0x02) 1: MIC(0x05)
 float volume[2] = {-100.0f,0.0f}; // 0: SPEAKER(0x02) 1: MIC(0x05)
 
 #define UAC1_ENTITY_SPK_FEATURE_UNIT    0x02
 #define UAC1_ENTITY_MIC_FEATURE_UNIT    0x05
 
-/*int main() {
-    board_init();
-
-    tusb_rhport_init_t dev_init = {
-        .role = TUSB_ROLE_DEVICE,
-        .speed = TUSB_SPEED_AUTO
-    };
-    tusb_init(BOARD_TUD_RHPORT, &dev_init);
-
-    board_init_after_tusb();
-
-    while (1) {
-        tud_task();
-    }
-}*/
-
-//--------------------------------------------------------------------+
-// Audio Callback Functions
-//--------------------------------------------------------------------+
-
 //--------------------------------------------------------------------+
 // UAC1 Helper Functions
 //--------------------------------------------------------------------+
 
 static bool audio10_set_req_entity(tusb_control_request_t const *p_request, uint8_t *pBuff) {
-    uint8_t channelNum = TU_U16_LOW(p_request->wValue);
+    (void) TU_U16_LOW(p_request->wValue); // channelNum unused
     uint8_t ctrlSel = TU_U16_HIGH(p_request->wValue);
     uint8_t entityID = TU_U16_HIGH(p_request->wIndex);
     uint8_t index = entityID == UAC1_ENTITY_SPK_FEATURE_UNIT ? 0 : 1;
@@ -91,7 +82,7 @@ static bool audio10_set_req_entity(tusb_control_request_t const *p_request, uint
 }
 
 static bool audio10_get_req_entity(uint8_t rhport, tusb_control_request_t const *p_request) {
-    uint8_t channelNum = TU_U16_LOW(p_request->wValue);
+    (void) TU_U16_LOW(p_request->wValue); // channelNum unused
     uint8_t ctrlSel = TU_U16_HIGH(p_request->wValue);
     uint8_t entityID = TU_U16_HIGH(p_request->wIndex);
     uint8_t index = entityID == UAC1_ENTITY_SPK_FEATURE_UNIT ? 0 : 1;
@@ -187,5 +178,6 @@ bool tud_audio_set_req_entity_cb(uint8_t rhport, tusb_control_request_t const *p
 
 void tud_hid_report_complete_cb(uint8_t instance, uint8_t const *report, uint16_t len) {
     (void) instance;
+    (void) report;
     (void) len;
 }

@@ -6,8 +6,8 @@
 #include "bsp/board_api.h"
 #include "bt.h"
 #include "utils.h"
-#include "resample.h"
 #include "audio.h"
+#include "wake.h"
 #include "hardware/clocks.h"
 #include "hardware/vreg.h"
 #include "hardware/watchdog.h"
@@ -21,11 +21,11 @@
 #include "battery_led.h"
 #endif
 
-// Pico SDK speciifically for waiting on conditions
+// Pico SDK specifically for waiting on conditions
 #include "pico/critical_section.h"
 
-int reportSeqCounter = 0;
-uint8_t packetCounter = 0;
+static_assert(sizeof(USBGetStateData) == 63,
+              "USBGetStateData must match the 63-byte BT 0x31 payload");
 
 uint8_t interrupt_in_data[63] = {
     0x7f, 0x7d, 0x7f, 0x7e, 0x00, 0x00, 0xa7,
@@ -39,12 +39,11 @@ uint8_t interrupt_in_data[63] = {
 };
 
 critical_section_t report_cs;
-volatile bool report_dirty = false;
+volatile bool report_pending = false;
 
 void interrupt_loop() {
     if (!tud_hid_ready()) return;
 
-    // TODO: Refactor for better code reuse
     if (get_config().polling_rate_mode != 2) {
         if (!tud_hid_report(0x01, interrupt_in_data, 63)) {
             printf("[USBHID] tud_hid_report error\n");
@@ -58,9 +57,9 @@ void interrupt_loop() {
 
 
     critical_section_enter_blocking(&report_cs);
-    if (report_dirty) {
+    if (report_pending) {
         memcpy(safe_report, interrupt_in_data, 63);
-        report_dirty = false;
+        report_pending = false;
         should_send = true;
     }
     critical_section_exit(&report_cs);
@@ -73,39 +72,44 @@ void interrupt_loop() {
             // If the report failed to queue, restore the dirty flag 
             // so we try again on the next loop iteration.
             critical_section_enter_blocking(&report_cs);
-            report_dirty = true;
+            report_pending = true;
             critical_section_exit(&report_cs);
         }
     }
 }
 
 void on_bt_data(CHANNEL_TYPE channel, uint8_t *data, uint16_t len) {
-    // printf("[Main] BT data callback: channel=%u len=%u\n", channel, len);
     if (channel == INTERRUPT && data[1] == 0x31) {
-        if ((data[56] & 1) != (interrupt_in_data[53] & 1)) {
-            set_headset(data[56] & 1);
+        const auto *state = reinterpret_cast<const USBGetStateData *>(data + 3);
+
+        if (state->PluggedHeadphones != (interrupt_in_data[53] & 1)) {
+            set_headset(state->PluggedHeadphones);
         }
+
+        // Wake-on-PS must observe every BT input report regardless of polling
+        // mode: the wake feature has its own state to maintain (button-byte
+        // diff for edge detection) and short-circuiting it on non-2 polling
+        // modes silently breaks wake while the host is suspended.
+        wake_on_bt_input(data + 3, len - 3);
+
+        // Pack power byte: PowerPercent in bits 0-3, PowerState in bits 4-7.
+        const uint8_t power_byte = static_cast<uint8_t>(
+            (static_cast<uint8_t>(state->Power) << 4) | state->PowerPercent);
 
         if (get_config().polling_rate_mode != 2) {
             memcpy(interrupt_in_data, data + 3, 63);
 #if ENABLE_BATT_LED
-            battery_led_note_report();
+            battery_led_note_report(power_byte);
 #endif
             return;
         }
 
-        // We add the critical section here to avoid any race conditions when writing to the interrupt_in_data buffer,
-        // which is shared between the main loop and this callback. 
-        // The critical section ensures that only one thread can access the buffer at a time, 
-        // preventing data corruption and ensuring thread safety.   
-        // We also set the report_dirty flag to true to indicate that new data is available
-        //  and needs to be sent in the next interrupt report.
         critical_section_enter_blocking(&report_cs);
         memcpy(interrupt_in_data, data + 3, 63);
-        report_dirty = true;
+        report_pending = true;
         critical_section_exit(&report_cs);
 #if ENABLE_BATT_LED
-        battery_led_note_report();
+        battery_led_note_report(power_byte);
 #endif
     }
 }
@@ -115,6 +119,15 @@ void on_bt_data(CHANNEL_TYPE channel, uint8_t *data, uint16_t len) {
 // Return zero will cause the stack to STALL request
 uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t *buffer,
                                uint16_t reqlen) {
+#ifdef ENABLE_WAKE_HID
+    if (itf == 1) {
+        if (reqlen >= 8) {
+            memset(buffer, 0, 8);
+            return 8;
+        }
+        return 0;
+    }
+#endif
     (void) itf;
     (void) report_id;
     (void) report_type;
@@ -127,10 +140,12 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
 
     std::vector<uint8_t> feature_data = get_feature_data(report_id, reqlen);
     if (!feature_data.empty()) {
-        memcpy(buffer, feature_data.data() + 1, feature_data.size() - 1);
+        uint16_t copy_len = std::min((uint16_t)(feature_data.size() - 1), reqlen);
+        memcpy(buffer, feature_data.data() + 1, copy_len);
+        return copy_len;
     }
 
-    return feature_data.empty() ? 0 : feature_data.size() - 1;
+    return 0;
 }
 
 bool tud_audio_set_itf_cb(uint8_t rhport, tusb_control_request_t const *p_request) {
@@ -149,6 +164,12 @@ bool tud_audio_set_itf_cb(uint8_t rhport, tusb_control_request_t const *p_reques
 // received data on OUT endpoint ( Report ID = 0, Type = 0 )
 void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t const *buffer,
                            uint16_t bufsize) {
+#ifdef ENABLE_WAKE_HID
+    if (itf == 1) {
+        // Drop keyboard SET_REPORT (host LED state).
+        return;
+    }
+#endif
     (void) itf;
     (void) report_id;
     (void) report_type;
@@ -165,15 +186,16 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
     if (report_id == 0) {
         switch (buffer[0]) {
             case 0x02: {
-                uint8_t outputData[78];
+                static int out_report_seq = 0;
+                uint8_t outputData[78]{};
                 outputData[0] = 0x31;
-                outputData[1] = reportSeqCounter << 4;
-                if (++reportSeqCounter == 256) {
-                    reportSeqCounter = 0;
-                }
-                outputData[2] = 0x10;
-                memcpy(outputData + 3, buffer + 1, bufsize - 1);
+                outputData[1] = (out_report_seq & 0x0F) << 4;
+                if (++out_report_seq >= 16) out_report_seq = 0;
+                memcpy(outputData + 2, buffer + 1, bufsize - 1);
                 bt_write(outputData, sizeof(outputData));
+                // SetStateData[2/3] = RumbleEmulationRight/Left (buffer[3/4])
+                if (bufsize > 4)
+                    notify_rumble(buffer[4], buffer[3]);
                 break;
             }
         }
@@ -200,6 +222,7 @@ int main() {
     };
     tusb_init(BOARD_TUD_RHPORT, &dev_init);
 #if !ENABLE_SERIAL
+    sleep_ms(150);
     tud_disconnect();
 #endif
     board_init_after_tusb();
@@ -220,7 +243,7 @@ int main() {
 #if !ENABLE_SERIAL
     if (watchdog_caused_reboot()) {
         printf("Rebooted by Watchdog!\n");
-        // 当崩溃重启以后，闪三下灯
+        // flash LED three times to signal a watchdog-triggered reboot
         for (int i = 0; i < 6; i++) {
             if (i % 2 == 0) {
                 cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, true);
@@ -236,6 +259,7 @@ int main() {
 
     // Initialize the critical section for the report buffer
     critical_section_init(&report_cs);
+    wake_init();
 
     config_load();
 
@@ -254,6 +278,8 @@ int main() {
 #endif
         cyw43_arch_poll();
         tud_task();
+        cmd_task();
+        wake_task();
         audio_loop();
         interrupt_loop();
 #if ENABLE_BATT_LED

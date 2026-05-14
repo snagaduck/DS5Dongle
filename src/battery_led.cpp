@@ -10,8 +10,6 @@
 #include "pico/cyw43_arch.h"
 #include "pico/time.h"
 
-extern uint8_t interrupt_in_data[63];
-
 namespace {
 
 constexpr uint64_t REPORT_STALE_US = 2'000'000;  // assume disconnected if no report for 2 s
@@ -23,6 +21,7 @@ uint64_t last_report_us = 0;
 uint64_t last_toggle_us = 0;
 bool     blinking       = false;
 bool     led_state      = false;
+uint8_t  last_power_byte = 0;
 
 }  // namespace
 
@@ -31,10 +30,12 @@ void battery_led_init(void) {
     last_toggle_us = 0;
     blinking = false;
     led_state = false;
+    last_power_byte = 0;
 }
 
-void battery_led_note_report(void) {
+void battery_led_note_report(uint8_t power_byte) {
     last_report_us = time_us_64();
+    last_power_byte = power_byte;
 }
 
 void battery_led_tick(void) {
@@ -45,7 +46,7 @@ void battery_led_tick(void) {
         return;
     }
 
-    const uint8_t b   = interrupt_in_data[52];
+    const uint8_t b   = last_power_byte;
     const uint8_t pct = b & 0x0F;
     const uint8_t st  = (b >> 4) & 0x0F;
     const bool low    = (st == POWER_STATE_DISCHARGING) && (pct <= THRESHOLD_LEVEL);

@@ -66,7 +66,6 @@ To opt out at build time, configure with `-DENABLE_BATT_LED=OFF`. Default is ON.
 ## Known Issues
 
 - ⚠️ Audio may experience slight stuttering
-- ⚠️ Overclocking is required for proper performance
 
 ## Performance / Overclocking
 
@@ -83,10 +82,80 @@ If your device fails to boot:
 
 ## Build Instructions
 
-To build the project from source:
+### Prerequisites
 
-1. Update TinyUSB in the Pico SDK to the latest version
-2. Compile using standard Pico SDK toolchain
+- [Pico SDK 2.2.0](https://github.com/raspberrypi/pico-sdk/releases/tag/2.2.0) (other versions not tested)
+- CMake 3.13+
+- `arm-none-eabi-gcc` toolchain
+
+### TinyUSB version
+
+Pico SDK 2.2.0 ships with TinyUSB 0.16. Both 0.16 and 0.20 are supported:
+
+**TinyUSB 0.16 (default):** The build system detects the version at configure time and automatically patches `audio_device.c` to allow UAC1 devices. No manual steps required — just run cmake as normal.
+
+**TinyUSB 0.20 (recommended):** Better native UAC1 support; no patching needed. To upgrade:
+
+```bash
+cd ~/.pico-sdk/sdk/2.2.0/lib/tinyusb
+git fetch origin
+git checkout 0.20.0
+```
+
+### Build
+
+```bash
+git clone --recurse-submodules https://github.com/snagaduck/DS5Dongle.git
+cd DS5Dongle
+mkdir build && cd build
+cmake ..
+make -j$(nproc)
+```
+
+The `.uf2` file will be in `build/ds5-bridge.uf2`.
+
+### CMake options
+
+| Option | Default | Description |
+|---|---|---|
+| `ENABLE_WAKE_HID` | `OFF` | Add HID keyboard interface to wake PC from S3 sleep on button press |
+| `ENABLE_BATT_LED` | `ON` | Blink onboard LED when controller battery ≤ 10% |
+| `ENABLE_SERIAL` | `OFF` | Enable USB CDC serial port for debug output |
+| `DISABLE_SPEAKER_PROC` | `OFF` | Disable speaker audio processing (haptics only) |
+| `PICO_W_BUILD` | `OFF` | Build for original Pico W (RP2040); disables audio, reduces clock to 200 MHz |
+| `SYS_CLOCK_KHZ` | `320000` | CPU frequency in kHz |
+
+Example: `cmake .. -DENABLE_WAKE_HID=ON`
+
+## Haptic audio filter (optional)
+
+The dongle routes USB audio channels 3/4 directly to the DualSense haptic actuators (LRAs). The LRAs respond most strongly to frequencies below ~400Hz — high-frequency content above that range feels like electrical noise rather than haptic sensation.
+
+An optional 2nd-order Butterworth low-pass filter (300Hz cutoff, −12dB/octave rolloff) is included but inactive by default. To enable it:
+
+1. Rename `src/haptic_filter.cpp.disabled` → `src/haptic_filter.cpp`
+2. Re-run cmake from your build directory:
+   ```bash
+   cmake ..
+   cmake --build . --parallel
+   ```
+
+To deactivate, rename the file back to `.disabled` and re-run cmake. When inactive the build is identical to the unfiltered version — there is no runtime overhead.
+
+**Using game audio as haptics:** When the filter is enabled, the firmware automatically reads the speaker audio (channels 1/2) and feeds it through the LPF into the haptic actuators. Whatever is playing through the dongle's audio output will drive the controller haptics — no external routing software required.
+
+## Wake-on-PS (optional)
+
+A `-DENABLE_WAKE_HID=ON` build adds a second HID interface (a boot keyboard) that injects an **F15** keypress when any controller button is pressed while the host is suspended, waking the PC from **S3 sleep**. F15 was chosen because it has no default Windows or app binding — a stray fire never inserts characters or triggers shortcuts.
+
+Scope: **S3 only.** Modern Standby (S0ix) is not supported. To check your machine, run `powercfg /a` — you need "Standby (S3)" listed under available sleep states.
+
+After flashing the wake build:
+
+1. Open Device Manager → the new **HID Keyboard Device** (and its parent **USB Composite Device**) → Properties → Power Management → tick **"Allow this device to wake the computer."**
+2. Verify with `powercfg /devicequery wake_armed`.
+3. Sleep the PC; press any button on the controller; the PC should wake within ~1 s.
+4. After a wake, `powercfg /lastwake` should attribute the wake to the HID Keyboard Device.
 
 ## Roadmap
 - Please check out [DS5Dongle plan](https://github.com/users/awalol/projects/5)

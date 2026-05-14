@@ -96,11 +96,19 @@
 
 //------------- CLASS -------------//
 #define CFG_TUD_AUDIO             1
+#ifdef ENABLE_WAKE_HID
+#define CFG_TUD_HID               2
+#else
 #define CFG_TUD_HID               1
+#endif
 #define CFG_TUD_CDC               ENABLE_SERIAL
 #define CFG_TUD_MSC               0
 #define CFG_TUD_MIDI              0
+#ifdef ENABLE_WAKE_HID
+#define CFG_TUD_VENDOR            1 // routes MS OS 2.0 vendor request to tud_vendor_control_xfer_cb
+#else
 #define CFG_TUD_VENDOR            0
+#endif
 
 // HID buffer size Should be sufficient to hold ID (if any) + Data
 #define CFG_TUD_HID_EP_BUFSIZE    64
@@ -122,13 +130,26 @@
 
 // UAC1 Full-Speed endpoint size
 #define CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE            48000
+#if DS5_TUSB_VERSION >= 2000
+// TinyUSB 0.20+: TUD_AUDIO_EP_SIZE takes 4 args (_is_highspeed, rate, bytes, ch)
 #define CFG_TUD_AUDIO_FUNC_1_FORMAT_1_EP_SZ_OUT     TUD_AUDIO_EP_SIZE(false, CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE, CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX, CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX)
 #define CFG_TUD_AUDIO_FUNC_1_FORMAT_1_EP_SZ_IN      TUD_AUDIO_EP_SIZE(false, CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE, CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_TX, CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX)
+#else
+// TinyUSB 0.16: TUD_AUDIO_EP_SIZE takes 3 args; audiod_open needs DESC_LEN
+#define CFG_TUD_AUDIO_FUNC_1_DESC_LEN               (187 + 8)
+#define CFG_TUD_AUDIO_FUNC_1_FORMAT_1_EP_SZ_OUT     TUD_AUDIO_EP_SIZE(CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE, CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_RX, CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX)
+#define CFG_TUD_AUDIO_FUNC_1_FORMAT_1_EP_SZ_IN      TUD_AUDIO_EP_SIZE(CFG_TUD_AUDIO_FUNC_1_SAMPLE_RATE, CFG_TUD_AUDIO_FUNC_1_N_BYTES_PER_SAMPLE_TX, CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX)
+#endif
 #define CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX          CFG_TUD_AUDIO_FUNC_1_FORMAT_1_EP_SZ_OUT
 #define CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX           CFG_TUD_AUDIO_FUNC_1_FORMAT_1_EP_SZ_IN
 
 #define CFG_TUD_AUDIO_FUNC_1_EP_OUT_SW_BUF_SZ       (3 * CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX)
 #define CFG_TUD_AUDIO_FUNC_1_EP_IN_SW_BUF_SZ        (4 * CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX)
+
+// 2 streaming interfaces: OUT (speaker) + IN (mic)
+#define CFG_TUD_AUDIO_FUNC_1_N_AS_INT               2
+// EP0 control buffer: large enough for a volume range request
+#define CFG_TUD_AUDIO_FUNC_1_CTRL_BUF_SZ            64
 
 // Enable OUT EP (speaker) and IN EP (mic)
 #define CFG_TUD_AUDIO_ENABLE_EP_OUT                 1

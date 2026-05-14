@@ -24,4 +24,7 @@ std::vector<uint8_t> get_feature_data(uint8_t reportId,uint16_t len);
 void init_feature();
 void set_feature_data(uint8_t reportId, uint8_t* data,uint16_t len);
 
+// Returns true when the connected controller is a DualSense Edge (DSE).
+bool bt_is_dse();
+
 #endif //DS5_BRIDGE_BT_H

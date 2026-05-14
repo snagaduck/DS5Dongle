@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 void battery_led_init(void);
 
 // Call once per main-loop iteration. Drives the LED blink while the
@@ -13,6 +15,6 @@ void battery_led_init(void);
 void battery_led_tick(void);
 
 // Call from the BT input-report callback whenever a fresh 0x31 report
-// has been copied into interrupt_in_data. Used to detect disconnection
-// via stale-report timeout.
-void battery_led_note_report(void);
+// has been received. power_byte is interrupt_in_data[52] from the report
+// (PowerPercent in bits 0-3, PowerState in bits 4-7).
+void battery_led_note_report(uint8_t power_byte);

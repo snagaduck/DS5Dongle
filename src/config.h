@@ -10,12 +10,14 @@
 struct __attribute__((packed)) Config_body {
     float haptics_gain; // [1.0,2.0]
     float speaker_volume; // [-100,0]
-    uint8_t inactive_time; // [10,60] min
+    uint8_t inactive_time; // [5,60] min
     uint8_t disable_inactive_disconnect; // bool: 0 disable,1 enable
     uint8_t disable_pico_led; // bool
     uint8_t polling_rate_mode; // 0: 250Hz, 1: 500Hz, 2: real-time
     uint8_t audio_buffer_length; // [16,128]
     uint8_t controller_mode; // 0: DS5, 1: DSE, 2: Auto
+    uint8_t haptic_yield_to_rumble; // bool: 1=mute audio haptics while game rumble is active
+    uint8_t haptic_silence_threshold; // [0,10]: gate level for audio haptic silence detection (0=off, 1=default)
 };
 
 struct __attribute__((packed)) Config {
@@ -26,13 +28,11 @@ struct __attribute__((packed)) Config {
     Config_body body;
 };
 
-void config_default();
 void config_load();
 bool config_save();
 const Config_body& get_config();
 void set_config(const uint8_t *new_config, const uint16_t len);
 void config_valid();
 void set_config(const Config_body &new_config);
-extern bool is_dse;
 
 #endif //DS5_BRIDGE_CONFIG_H

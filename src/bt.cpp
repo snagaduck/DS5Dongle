@@ -15,6 +15,8 @@
 #include "bsp/board_api.h"
 #include "classic/sdp_server.h"
 #include "config.h"
+#include "settings.h"
+#include "wake.h"
 #include "pico/util/queue.h"
 
 #define MTU_CONTROL 672
@@ -31,12 +33,14 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
 static btstack_packet_callback_registration_t hci_event_callback_registration, l2cap_event_callback_registration;
 static bd_addr_t current_device_addr;
 static bool device_found = false;
-static bool new_pair = false; // 只有新匹配的设备才用创建channel，自动重连走的是service
+static bool new_pair = false; // only newly-paired devices open a channel; auto-reconnect goes through the service
 static hci_con_handle_t acl_handle = HCI_CON_HANDLE_INVALID;
 static uint16_t hid_control_cid;
 static uint16_t hid_interrupt_cid;
 static bt_data_callback_t bt_data_callback = nullptr;
 static bool check_dse = false;
+static bool is_dse = false;
+static bool led_claimed = false;
 unordered_map<uint8_t, vector<uint8_t> > feature_data;
 queue_t send_fifo;
 queue_t priority_send_fifo;
@@ -46,7 +50,7 @@ struct send_element {
     size_t len;
 };
 
-absolute_time_t inactive_time = 0; // 手柄长时间静默
+absolute_time_t inactive_time = 0; // controller has been silent for an extended period
 
 void bt_register_data_callback(bt_data_callback_t callback) {
     bt_data_callback = callback;
@@ -77,7 +81,7 @@ bool bt_disconnect() {
 void bt_l2cap_init() {
     l2cap_event_callback_registration.callback = &l2cap_packet_handler;
     l2cap_add_event_handler(&l2cap_event_callback_registration);
-    // 修复重连后自动断开的关键点
+    // critical for preventing auto-disconnect after reconnect
     sdp_init();
     l2cap_register_service(l2cap_packet_handler, PSM_HID_CONTROL, MTU_CONTROL, LEVEL_2);
     l2cap_register_service(l2cap_packet_handler, PSM_HID_INTERRUPT, MTU_INTERRUPT, LEVEL_2);
@@ -106,21 +110,6 @@ int bt_init() {
     hci_power_control(HCI_POWER_ON);
     return 0;
 }
-
-/*int main() {
-    stdio_init_all();
-
-    /*while (!stdio_usb_connected()) {
-        sleep_ms(100);
-    }
-    printf("USB Serial connected!\n");#1#
-
-    bt_init();
-
-    while (1) {
-        sleep_ms(10);
-    }
-}*/
 
 static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) {
     (void) channel;
@@ -319,12 +308,94 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
             hid_control_cid = 0;
             hid_interrupt_cid = 0;
             feature_data.clear();
+            led_claimed = false;
+            wake_on_bt_disconnect();
             cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, false);
             printf("[HCI] Disconnected reason=0x%02X, start inquiry\n", reason);
             gap_inquiry_start(30);
             break;
         }
     }
+}
+
+// Populate the fields common to both the connect init packet and the LED claim packet.
+static void fill_set_state(SetStateData *sd) {
+    sd->EnableRumbleEmulation     = 0; // superseded by EnableImprovedRumbleEmulation below
+    sd->UseRumbleNotHaptics       = 0;
+    sd->AllowRightTriggerFFB      = 1;
+    sd->AllowLeftTriggerFFB       = 1;
+    sd->AllowHeadphoneVolume      = 1;
+    sd->AllowSpeakerVolume        = 1;
+    sd->AllowMicVolume            = 1;
+    sd->AllowAudioControl         = 1;
+
+    sd->AllowMuteLight            = 1;
+    sd->AllowAudioMute            = 1;
+    sd->AllowHapticLowPassFilter  = 1;
+    sd->AllowMotorPowerLevel      = 1;
+    sd->AllowAudioControl2        = 1;
+    // AllowLedColor, ResetLights, AllowPlayerIndicators: set by send_bt_led()
+
+    sd->VolumeHeadphones = BT_VOLUME_HEADPHONES;
+    sd->VolumeSpeaker    = BT_VOLUME_SPEAKER;
+    sd->VolumeMic        = BT_VOLUME_MIC;
+
+    sd->MicSelect         = 1; // Internal Only
+    sd->EchoCancelEnable  = BT_ECHO_CANCEL;
+    sd->NoiseCancelEnable = BT_NOISE_CANCEL;
+
+    sd->MuteLightMode = BT_MUTE_LIGHT;
+
+#if DISABLE_SPEAKER_PROC
+    sd->AudioPowerSave = 1;
+    sd->SpeakerMute    = 1;
+#endif
+
+    sd->SpeakerCompPreGain           = BT_SPEAKER_COMP_PREGAIN;
+    sd->BeamformingEnable            = BT_BEAMFORMING;
+
+    sd->AllowLightBrightnessChange   = 1;
+    sd->AllowColorLightFadeAnimation = 1;
+    sd->EnableImprovedRumbleEmulation = 1;
+
+    sd->HapticLowPassFilter = 1;
+}
+
+// Sent on connect: audio/rumble/mic settings only.
+// LED control is deferred until after the BT pair animation (see send_bt_led).
+static void send_bt_init() {
+    uint8_t report32[142]{};
+    report32[0] = 0x32;
+    report32[1] = 0x10;
+    report32[2] = 0x90; // preamble (purpose unknown)
+    report32[3] = 0x3f;
+    fill_set_state(reinterpret_cast<SetStateData *>(report32 + 4));
+    bt_write(report32, sizeof(report32));
+}
+
+// Sent once after SensorTimestamp >= 10200000: pulses ResetLights to claim the
+// lightbar out of BT firmware control, then applies the configured RGB color.
+static void send_bt_led(const bool dse) {
+    uint8_t report32[142]{};
+    report32[0] = 0x32;
+    report32[1] = 0x10;
+    report32[2] = 0x90;
+    report32[3] = 0x3f;
+    auto *sd = reinterpret_cast<SetStateData *>(report32 + 4);
+    fill_set_state(sd);
+
+    sd->ResetLights           = 1; // pulse once to release LEDs from BT firmware
+    sd->AllowLedColor         = 1;
+    sd->AllowPlayerIndicators = 1;
+
+    sd->LightFadeAnimation = dse ? BT_DSE_LIGHT_FADE        : BT_DS5_LIGHT_FADE;
+    sd->LightBrightness    = dse ? BT_DSE_LIGHT_BRIGHTNESS  : BT_DS5_LIGHT_BRIGHTNESS;
+    sd->PlayerIndicators   = dse ? BT_DSE_PLAYER_INDICATORS : BT_DS5_PLAYER_INDICATORS;
+    sd->LedRed             = dse ? BT_DSE_LED_R             : BT_DS5_LED_R;
+    sd->LedGreen           = dse ? BT_DSE_LED_G             : BT_DS5_LED_G;
+    sd->LedBlue            = dse ? BT_DSE_LED_B             : BT_DS5_LED_B;
+
+    bt_write(report32, sizeof(report32));
 }
 
 static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) {
@@ -336,11 +407,27 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
             // printf_hexdump(packet, size);
             bt_data_callback(INTERRUPT, packet, size);
 
-            // 静默检测
+            // Claim LED control once the BT pair animation is done.
+            // SDL2 waits for SensorTimestamp >= 10200000 before pulsing ResetLights.
+            if (!led_claimed && size >= 3u + static_cast<uint16_t>(sizeof(USBGetStateData))) {
+                const auto *state = reinterpret_cast<const USBGetStateData *>(packet + 3);
+                if (state->SensorTimestamp >= 10200000u) {
+                    led_claimed = true;
+                    send_bt_led(is_dse);
+                }
+            }
+
+            // controller inactivity detection
             if (get_config().disable_inactive_disconnect) {
                 return;
             }
-            if (packet[3] < 120 || packet[3] > 140) {
+            if (packet[3] < 120 || packet[3] > 140 ||
+                packet[4] < 120 || packet[4] > 140 ||
+                packet[5] < 120 || packet[5] > 140 ||
+                packet[6] < 120 || packet[6] > 140 ||
+                packet[7] > 0 || packet[8] > 0 ||
+                packet[10] != 0x08 || packet[11] != 0x00 ||
+                packet[12] != 0x00) {
                 inactive_time = get_absolute_time();
             } else if (absolute_time_diff_us(inactive_time, get_absolute_time()) >
                        static_cast<int64_t>(get_config().inactive_time) * 60 * 1000 * 1000) {
@@ -354,6 +441,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                     printf("Connected DSE Controller\n");
                     check_dse = false;
                     is_dse = true;
+                    send_bt_init();
 #if !ENABLE_SERIAL
                     tud_connect();
 #endif
@@ -361,12 +449,13 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                     printf("Connected DS5 Controller\n");
                     check_dse = false;
                     is_dse = false;
+                    send_bt_init();
 #if !ENABLE_SERIAL
                     tud_connect();
 #endif
                 }
             }
-            if (packet[0] == 0xA3) {
+            if (packet[0] == 0xA3 && size >= 2) {
                 uint8_t report_id = packet[1];
                 feature_data[report_id].assign(packet + 1, packet + size);
 #if ENABLE_VERBOSE
@@ -410,27 +499,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                     printf("Init DualSense\n");
 
                     init_feature();
-                    // 初始化手柄状态
-                    uint8_t report32[142];
-                    report32[0] = 0x32;
-                    report32[1] = 0x10; // reportSeqCounter
-                    uint8_t packet_0x10[] =
-                    {
-                        0x90, // Packet: 0x10
-                        0x3f, // 63
-                        // SetStateData
-                        0xfd, 0xf7, 0x0, 0x0,
-                        0x7f, 0x7f, // Headphones, Speaker
-                        0xff, 0x9, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-                        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-                        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-                        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa,
-                        0x7, 0x0, 0x0, 0x2, 0x1,
-                        0x00,
-                        0xff, 0xd7, 0x00 // RGB LED: R, G, B (Nijika Color!)✨
-                    };
-                    memcpy(report32 + 2, packet_0x10, sizeof(packet_0x10));
-                    bt_write(report32, sizeof(report32));
+                    send_bt_init(); // audio/rumble/mic only; LED deferred until pair animation ends
 
                     const auto mtu = l2cap_get_remote_mtu_for_local_cid(hid_interrupt_cid);
                     printf("[L2CAP] Remote Interrupt MTU: %d\n",mtu);
@@ -474,9 +543,8 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
             } else {
                 printf("[L2CAP] Channel closed cid=0x%04X\n", local_cid);
             }
-            if (hid_control_cid == 0 && hid_interrupt_cid == 0) {
-                bt_disconnect();
-            }
+            // Both channels closed — ACL disconnect fires separately via
+            // HCI_EVENT_DISCONNECTION_COMPLETE; no need to call bt_disconnect() here.
             break;
         }
 
@@ -507,7 +575,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
 void bt_write(const uint8_t *data, const uint16_t len, const bool priority) {
     if (hid_interrupt_cid == 0) return;
     static send_element packet{};
-    memset(packet.data, 0, 512);
+    memset(packet.data, 0, len + 1);
     packet.len = len + 1;
     packet.data[0] = 0xA2;
     memcpy(packet.data + 1, data, len);
@@ -556,15 +624,17 @@ vector<uint8_t> get_feature_data(uint8_t reportId, uint16_t len) {
 
 void set_feature_data(uint8_t reportId, uint8_t *data, uint16_t len) {
     if (hid_control_cid != 0) {
-        uint8_t get_feature[len + 2];
+        uint8_t get_feature[256];
+        const uint16_t total = len + 2;
+        if (total > sizeof(get_feature)) return;
         get_feature[0] = 0x53;
         get_feature[1] = reportId;
         memcpy(get_feature + 2, data, len);
         fill_feature_report_checksum(get_feature + 1, len + 1);
-        l2cap_send(hid_control_cid, get_feature, len + 2);
+        l2cap_send(hid_control_cid, get_feature, total);
 #if ENABLE_VERBOSE
         printf("[L2CAP] Requesting Set Feature Report 0x%02X\n", reportId);
-        printf_hexdump(get_feature, len + 2);
+        printf_hexdump(get_feature, total);
 #endif
     }
 }
@@ -575,8 +645,30 @@ void init_feature() {
     get_feature_data(0x22, 64);
     get_feature_data(0x05, 41);
     // DSE
-    // check DSE by request 0x70 feature report. DSE return DEFAULT
-    // If len == 1, it's DS5
-    check_dse = true;
-    get_feature_data(0x70, 64);
+    const uint8_t mode = get_config().controller_mode;
+    if (mode == 0) {
+        // Forced DS5: skip detection, connect immediately
+        is_dse = false;
+        check_dse = false;
+        send_bt_init();
+#if !ENABLE_SERIAL
+        tud_connect();
+#endif
+    } else if (mode == 1) {
+        // Forced DSE: skip detection, connect immediately
+        is_dse = true;
+        check_dse = false;
+        send_bt_init();
+#if !ENABLE_SERIAL
+        tud_connect();
+#endif
+    } else {
+        // Auto: detect via 0x70 feature report response
+        check_dse = true;
+        get_feature_data(0x70, 64);
+    }
+}
+
+bool bt_is_dse() {
+    return is_dse;
 }

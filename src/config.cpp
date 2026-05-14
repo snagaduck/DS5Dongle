@@ -3,6 +3,7 @@
 //
 
 #include "config.h"
+#include "settings.h"
 
 #include <cmath>
 #include <cstring>
@@ -16,12 +17,9 @@ constexpr uint32_t CONFIG_MAGIC = 0x66ccff00;
 constexpr uint16_t CONFIG_VERSION = 1;
 constexpr uint32_t CONFIG_FLASH_OFFSET = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 static Config config{};
-bool is_dse = false;
 
-// 编译期保护
-// 判断Config结构体是否能放进flash 256bytes
+// compile-time guards: Config must fit in one flash page; offset must be sector-aligned
 static_assert(sizeof(Config) <= FLASH_PAGE_SIZE);
-// 配置区起始地址必须按 flash sector 对齐。
 static_assert(CONFIG_FLASH_OFFSET % FLASH_SECTOR_SIZE == 0);
 
 uint32_t calc_config_crc(const Config &con) {
@@ -48,41 +46,60 @@ void config_valid() {
     }
     auto body = &config.body;
     if (std::isnan(body->haptics_gain) || body->haptics_gain < 1.0f || body->haptics_gain > 2.0f) {
-        body->haptics_gain = 1.0f;
+        body->haptics_gain = DEFAULT_HAPTICS_GAIN;
         printf("[Config] Haptics Gain value is invalid\n");
     }
     if (std::isnan(body->speaker_volume) || body->speaker_volume < -100 || body->speaker_volume > 0) {
-        body->speaker_volume = -100;
+        body->speaker_volume = DEFAULT_SPEAKER_VOLUME;
         printf("[Config] Speaker Volume is invalid\n");
     }
     if (body->inactive_time < 5 || body->inactive_time > 60) {
-        body->inactive_time = 30;
+        body->inactive_time = DEFAULT_INACTIVE_TIME;
         printf("[Config] Inactive time is invalid\n");
     }
     if (body->disable_inactive_disconnect > 1) {
-        body->disable_inactive_disconnect = 0;
+        body->disable_inactive_disconnect = DEFAULT_DISABLE_DISCONNECT;
         printf("[Config] disable_auto_disconnect is invalid\n");
     }
     if (body->disable_pico_led > 1) {
-        body->disable_pico_led = 0;
+        body->disable_pico_led = DEFAULT_DISABLE_PICO_LED;
         printf("[Config] disable_pico_led is invalid\n");
     }
     if (body->polling_rate_mode > 2) {
-        body->polling_rate_mode = 0;
+        body->polling_rate_mode = DEFAULT_POLLING_RATE;
         printf("[Config] polling_rate_mode is invalid\n");
     }
     if (body->audio_buffer_length < 16 || body->audio_buffer_length > 128) {
-        body->audio_buffer_length = 64;
+        body->audio_buffer_length = DEFAULT_AUDIO_BUFFER;
         printf("[Config] haptics_buffer_length is invalid\n");
     }
     if (body->controller_mode > 2) {
-        body->controller_mode = 2;
+        body->controller_mode = DEFAULT_CONTROLLER_MODE;
         printf("[Config] controller_mode is invalid\n");
+    }
+    if (body->haptic_yield_to_rumble > 1) {
+        body->haptic_yield_to_rumble = DEFAULT_HAPTIC_YIELD_RUMBLE;
+        printf("[Config] haptic_yield_to_rumble is invalid\n");
+    }
+    if (body->haptic_silence_threshold > 10) {
+        body->haptic_silence_threshold = DEFAULT_HAPTIC_SILENCE_THRESHOLD;
+        printf("[Config] haptic_silence_threshold is invalid\n");
     }
 }
 
 void config_load() {
     memcpy(&config, flash_config(), sizeof(Config));
+
+    if (config.magic == CONFIG_MAGIC && config.version == CONFIG_VERSION &&
+        config.size == sizeof(Config_body)) {
+        const uint32_t stored_crc = config.crc32;
+        const uint32_t actual_crc = calc_config_crc(config);
+        if (stored_crc != actual_crc) {
+            printf("[Config] CRC mismatch (stored 0x%08X, actual 0x%08X) — resetting to defaults\n",
+                   stored_crc, actual_crc);
+            config = {};
+        }
+    }
 
     config_valid();
 }
