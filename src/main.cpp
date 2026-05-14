@@ -187,12 +187,11 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
         switch (buffer[0]) {
             case 0x02: {
                 static int out_report_seq = 0;
-                uint8_t outputData[78];
+                uint8_t outputData[78]{};
                 outputData[0] = 0x31;
                 outputData[1] = (out_report_seq & 0x0F) << 4;
                 if (++out_report_seq >= 16) out_report_seq = 0;
-                outputData[2] = 0x10;
-                memcpy(outputData + 3, buffer + 1, bufsize - 1);
+                memcpy(outputData + 2, buffer + 1, bufsize - 1);
                 bt_write(outputData, sizeof(outputData));
                 break;
             }
