@@ -38,6 +38,7 @@ static uint16_t hid_control_cid;
 static uint16_t hid_interrupt_cid;
 static bt_data_callback_t bt_data_callback = nullptr;
 static bool check_dse = false;
+static bool is_dse = false;
 unordered_map<uint8_t, vector<uint8_t> > feature_data;
 queue_t send_fifo;
 queue_t priority_send_fifo;
@@ -484,9 +485,8 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
             } else {
                 printf("[L2CAP] Channel closed cid=0x%04X\n", local_cid);
             }
-            if (hid_control_cid == 0 && hid_interrupt_cid == 0) {
-                bt_disconnect();
-            }
+            // Both channels closed — ACL disconnect fires separately via
+            // HCI_EVENT_DISCONNECTION_COMPLETE; no need to call bt_disconnect() here.
             break;
         }
 
@@ -587,8 +587,30 @@ void init_feature() {
     get_feature_data(0x22, 64);
     get_feature_data(0x05, 41);
     // DSE
-    // check DSE by request 0x70 feature report. DSE return DEFAULT
-    // If len == 1, it's DS5
-    check_dse = true;
-    get_feature_data(0x70, 64);
+    const uint8_t mode = get_config().controller_mode;
+    if (mode == 0) {
+        // Forced DS5: skip detection, connect immediately
+        is_dse = false;
+        check_dse = false;
+        send_bt_init(false);
+#if !ENABLE_SERIAL
+        tud_connect();
+#endif
+    } else if (mode == 1) {
+        // Forced DSE: skip detection, connect immediately
+        is_dse = true;
+        check_dse = false;
+        send_bt_init(true);
+#if !ENABLE_SERIAL
+        tud_connect();
+#endif
+    } else {
+        // Auto: detect via 0x70 feature report response
+        check_dse = true;
+        get_feature_data(0x70, 64);
+    }
+}
+
+bool bt_is_dse() {
+    return is_dse;
 }
