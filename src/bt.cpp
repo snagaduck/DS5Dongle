@@ -313,6 +313,42 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
     }
 }
 
+static void send_bt_init(const bool dse) {
+    const uint8_t led_r        = dse ? BT_DSE_LED_R             : BT_DS5_LED_R;
+    const uint8_t led_g        = dse ? BT_DSE_LED_G             : BT_DS5_LED_G;
+    const uint8_t led_b        = dse ? BT_DSE_LED_B             : BT_DS5_LED_B;
+    const uint8_t player_ind   = dse ? BT_DSE_PLAYER_INDICATORS : BT_DS5_PLAYER_INDICATORS;
+    const uint8_t light_fade   = dse ? BT_DSE_LIGHT_FADE        : BT_DS5_LIGHT_FADE;
+    const uint8_t light_bright = dse ? BT_DSE_LIGHT_BRIGHTNESS  : BT_DS5_LIGHT_BRIGHTNESS;
+
+    uint8_t report32[142]{};
+    report32[0] = 0x32;
+    report32[1] = 0x10;
+    const uint8_t pkt[] = {
+        0x90, 0x3f,
+        // SetStateData
+        0xfd, 0xff, 0x00, 0x00,           // flags1, flags2, RumbleEmulation R/L
+        BT_VOLUME_HEADPHONES, BT_VOLUME_SPEAKER,
+        BT_VOLUME_MIC,    BT_AUDIO_CONTROL,
+        BT_MUTE_LIGHT,    BT_MUTE_CONTROL,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // SD[10-20]: RightTriggerFFB
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // SD[21-31]: LeftTriggerFFB
+        0, 0, 0, 0,                       // SD[32-35]: HostTimestamp
+        0x00,                             // SD[36]: MotorPowerLevel
+        BT_AUDIO_CONTROL2,                // SD[37]
+        0x07,                             // SD[38]: LightFlags (AllowLightBrightness|AllowColorFade|EnableImprovedRumble)
+        0x01,                             // SD[39]: HapticLowPassFilter
+        0x00,                             // SD[40]: reserved
+        light_fade,                       // SD[41]: LightFadeAnimation
+        light_bright,                     // SD[42]: LightBrightness
+        player_ind,                       // SD[43]: PlayerIndicators
+        led_r, led_g, led_b               // SD[44-46]: lightbar RGB
+    };
+    static_assert(sizeof(pkt) == 49);
+    memcpy(report32 + 2, pkt, sizeof(pkt));
+    bt_write(report32, sizeof(report32));
+}
+
 static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) {
     (void) channel;
 
@@ -346,6 +382,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                     printf("Connected DSE Controller\n");
                     check_dse = false;
                     is_dse = true;
+                    send_bt_init(true);
 #if !ENABLE_SERIAL
                     tud_connect();
 #endif
@@ -353,6 +390,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                     printf("Connected DS5 Controller\n");
                     check_dse = false;
                     is_dse = false;
+                    send_bt_init(false);
 #if !ENABLE_SERIAL
                     tud_connect();
 #endif
@@ -402,27 +440,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                     printf("Init DualSense\n");
 
                     init_feature();
-                    // 初始化手柄状态
-                    uint8_t report32[142];
-                    report32[0] = 0x32;
-                    report32[1] = 0x10; // reportSeqCounter
-                    uint8_t packet_0x10[] =
-                    {
-                        0x90, // Packet: 0x10
-                        0x3f, // 63
-                        // SetStateData
-                        0xfd, 0xff, 0x0, 0x0, // flags2: 0xff adds ResetLights (bit 3) to claim LED from wireless fw
-                        BT_VOLUME_HEADPHONES, BT_VOLUME_SPEAKER,
-                        BT_VOLUME_MIC, 0x9, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-                        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-                        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-                        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa,
-                        0x7, 0x1, 0x0, 0x2, 0x1, // SD[39]=0x1: HapticLowPassFilter enable
-                        0x00,
-                        BT_LED_R, BT_LED_G, BT_LED_B
-                    };
-                    memcpy(report32 + 2, packet_0x10, sizeof(packet_0x10));
-                    bt_write(report32, sizeof(report32));
+                    send_bt_init(false); // DS5 defaults; re-sent with correct type after detection
 
                     const auto mtu = l2cap_get_remote_mtu_for_local_cid(hid_interrupt_cid);
                     printf("[L2CAP] Remote Interrupt MTU: %d\n",mtu);
