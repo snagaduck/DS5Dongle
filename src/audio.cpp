@@ -117,8 +117,12 @@ void audio_loop() {
         if (haptic_buf_pos != SAMPLE_SIZE) {
             continue;
         }
-        // Skip silent packets so the controller's own haptic events
+        // Skip silent haptic packets so the controller's own haptic events
         // (profile switch, trigger effects) aren't overwritten by zeros.
+        // Only safe when speaker processing is disabled: the 0x36 packet
+        // also carries opus speaker audio, so we must not drop it when
+        // speaker proc is active even if the haptic channels are silent.
+#if DISABLE_SPEAKER_PROC
         {
             bool has_signal = false;
             for (int j = 0; j < SAMPLE_SIZE && !has_signal; j++)
@@ -128,6 +132,7 @@ void audio_loop() {
                 continue;
             }
         }
+#endif
         uint8_t pkt[REPORT_SIZE]{};
         pkt[0] = REPORT_ID;
         pkt[1] = reportSeqCounter << 4;
