@@ -16,6 +16,7 @@
 #include "classic/sdp_server.h"
 #include "config.h"
 #include "settings.h"
+#include "wake.h"
 #include "pico/util/queue.h"
 
 #define MTU_CONTROL 672
@@ -32,7 +33,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
 static btstack_packet_callback_registration_t hci_event_callback_registration, l2cap_event_callback_registration;
 static bd_addr_t current_device_addr;
 static bool device_found = false;
-static bool new_pair = false; // 只有新匹配的设备才用创建channel，自动重连走的是service
+static bool new_pair = false; // only newly-paired devices open a channel; auto-reconnect goes through the service
 static hci_con_handle_t acl_handle = HCI_CON_HANDLE_INVALID;
 static uint16_t hid_control_cid;
 static uint16_t hid_interrupt_cid;
@@ -48,7 +49,7 @@ struct send_element {
     size_t len;
 };
 
-absolute_time_t inactive_time = 0; // 手柄长时间静默
+absolute_time_t inactive_time = 0; // controller has been silent for an extended period
 
 void bt_register_data_callback(bt_data_callback_t callback) {
     bt_data_callback = callback;
@@ -79,7 +80,7 @@ bool bt_disconnect() {
 void bt_l2cap_init() {
     l2cap_event_callback_registration.callback = &l2cap_packet_handler;
     l2cap_add_event_handler(&l2cap_event_callback_registration);
-    // 修复重连后自动断开的关键点
+    // critical for preventing auto-disconnect after reconnect
     sdp_init();
     l2cap_register_service(l2cap_packet_handler, PSM_HID_CONTROL, MTU_CONTROL, LEVEL_2);
     l2cap_register_service(l2cap_packet_handler, PSM_HID_INTERRUPT, MTU_INTERRUPT, LEVEL_2);
@@ -306,6 +307,7 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
             hid_control_cid = 0;
             hid_interrupt_cid = 0;
             feature_data.clear();
+            wake_on_bt_disconnect();
             cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, false);
             printf("[HCI] Disconnected reason=0x%02X, start inquiry\n", reason);
             gap_inquiry_start(30);

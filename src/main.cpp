@@ -24,6 +24,9 @@
 // Pico SDK specifically for waiting on conditions
 #include "pico/critical_section.h"
 
+static_assert(sizeof(USBGetStateData) == 63,
+              "USBGetStateData must match the 63-byte BT 0x31 payload");
+
 uint8_t interrupt_in_data[63] = {
     0x7f, 0x7d, 0x7f, 0x7e, 0x00, 0x00, 0xa7,
     0x08, 0x00, 0x00, 0x00, 0x52, 0x43, 0x30, 0x41,
@@ -76,10 +79,11 @@ void interrupt_loop() {
 }
 
 void on_bt_data(CHANNEL_TYPE channel, uint8_t *data, uint16_t len) {
-    // printf("[Main] BT data callback: channel=%u len=%u\n", channel, len);
     if (channel == INTERRUPT && data[1] == 0x31) {
-        if ((data[56] & 1) != (interrupt_in_data[53] & 1)) {
-            set_headset(data[56] & 1);
+        const auto *state = reinterpret_cast<const USBGetStateData *>(data + 3);
+
+        if (state->PluggedHeadphones != (interrupt_in_data[53] & 1)) {
+            set_headset(state->PluggedHeadphones);
         }
 
         // Wake-on-PS must observe every BT input report regardless of polling
@@ -88,10 +92,14 @@ void on_bt_data(CHANNEL_TYPE channel, uint8_t *data, uint16_t len) {
         // modes silently breaks wake while the host is suspended.
         wake_on_bt_input(data + 3, len - 3);
 
+        // Pack power byte: PowerPercent in bits 0-3, PowerState in bits 4-7.
+        const uint8_t power_byte = static_cast<uint8_t>(
+            (static_cast<uint8_t>(state->Power) << 4) | state->PowerPercent);
+
         if (get_config().polling_rate_mode != 2) {
             memcpy(interrupt_in_data, data + 3, 63);
 #if ENABLE_BATT_LED
-            battery_led_note_report(data[55]); // data[3+52] = interrupt_in_data[52] (power state/percent)
+            battery_led_note_report(power_byte);
 #endif
             return;
         }
@@ -101,7 +109,7 @@ void on_bt_data(CHANNEL_TYPE channel, uint8_t *data, uint16_t len) {
         report_pending = true;
         critical_section_exit(&report_cs);
 #if ENABLE_BATT_LED
-        battery_led_note_report(data[55]); // BT report byte 55 = interrupt_in_data[52] (power state/percent)
+        battery_led_note_report(power_byte);
 #endif
     }
 }
@@ -178,11 +186,11 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
     if (report_id == 0) {
         switch (buffer[0]) {
             case 0x02: {
-                static int reportSeqCounter = 0;
+                static int out_report_seq = 0;
                 uint8_t outputData[78];
                 outputData[0] = 0x31;
-                outputData[1] = (reportSeqCounter & 0x0F) << 4;
-                if (++reportSeqCounter >= 16) reportSeqCounter = 0;
+                outputData[1] = (out_report_seq & 0x0F) << 4;
+                if (++out_report_seq >= 16) out_report_seq = 0;
                 outputData[2] = 0x10;
                 memcpy(outputData + 3, buffer + 1, bufsize - 1);
                 bt_write(outputData, sizeof(outputData));
@@ -233,7 +241,7 @@ int main() {
 #if !ENABLE_SERIAL
     if (watchdog_caused_reboot()) {
         printf("Rebooted by Watchdog!\n");
-        // 当崩溃重启以后，闪三下灯
+        // flash LED three times to signal a watchdog-triggered reboot
         for (int i = 0; i < 6; i++) {
             if (i % 2 == 0) {
                 cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, true);

@@ -31,6 +31,7 @@ using std::clamp;
 using std::max;
 
 static WDL_Resampler resampler;
+static volatile bool core1_healthy = false;
 static uint8_t reportSeqCounter = 0;
 static uint8_t packetCounter = 0;
 static bool plug_headset = false;
@@ -161,9 +162,15 @@ void audio_loop() {
         // L Headset R Speaker: 0x15
         // Headset: 0x16
         pkt[78] = 200;
-        critical_section_enter_blocking(&opus_cs);
-        memcpy(pkt + 79, opus_buf, 200);
-        critical_section_exit(&opus_cs);
+        if (core1_healthy) {
+            critical_section_enter_blocking(&opus_cs);
+            memcpy(pkt + 79, opus_buf, 200);
+            critical_section_exit(&opus_cs);
+        } else {
+            static uint32_t warn_count = 0;
+            if ((++warn_count % 500) == 1)
+                printf("[Audio] Warning: Core 1 not healthy, speaker audio muted (count: %lu)\n", warn_count);
+        }
 #endif
         bt_write(pkt, sizeof(pkt), true);
         haptic_buf_pos = 0;
@@ -187,11 +194,12 @@ static WDL_Resampler resampler_audio;
 
 void core1_entry() {
     int error = 0;
-    encoder = opus_encoder_create(48000, 2,OPUS_APPLICATION_AUDIO, &error);
+    encoder = opus_encoder_create(48000, 2, OPUS_APPLICATION_AUDIO, &error);
     if (error != 0) {
-        printf("[Audio] OpusEncoder create failed\n");
+        printf("[Audio] OpusEncoder create failed (error %d) — speaker audio disabled\n", error);
         return;
     }
+    core1_healthy = true;
     opus_encoder_ctl(encoder,OPUS_SET_EXPERT_FRAME_DURATION(OPUS_FRAMESIZE_10_MS));
     opus_encoder_ctl(encoder,OPUS_SET_BITRATE(200 * 8 * 100));
     opus_encoder_ctl(encoder,OPUS_SET_VBR(false));
@@ -204,7 +212,7 @@ void core1_entry() {
     while (true) {
         static audio_raw_element audio_element{};
         queue_remove_blocking(&audio_fifo, &audio_element);
-        // 将 512 frames 重采样成 480 frames 以解决噪音问题。感谢 @Junhoo
+        // resample 512 frames → 480 frames to eliminate noise. credit: @Junhoo
         WDL_ResampleSample *in_buf;
         int nframes = resampler_audio.ResamplePrepare(512, 2, &in_buf);
         for (int i = 0; i < nframes * 2; i++) {

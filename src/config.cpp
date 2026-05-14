@@ -18,10 +18,8 @@ constexpr uint16_t CONFIG_VERSION = 1;
 constexpr uint32_t CONFIG_FLASH_OFFSET = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 static Config config{};
 
-// 编译期保护
-// 判断Config结构体是否能放进flash 256bytes
+// compile-time guards: Config must fit in one flash page; offset must be sector-aligned
 static_assert(sizeof(Config) <= FLASH_PAGE_SIZE);
-// 配置区起始地址必须按 flash sector 对齐。
 static_assert(CONFIG_FLASH_OFFSET % FLASH_SECTOR_SIZE == 0);
 
 uint32_t calc_config_crc(const Config &con) {

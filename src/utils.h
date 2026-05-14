@@ -118,7 +118,7 @@ inline uint32_t crc32_seeded(const uint8_t *data, size_t size, const uint32_t se
 }
 
 inline uint32_t crc32(const uint8_t* data, size_t size) {
-    return crc32_seeded(data, size, 0xEADA2D49); // 0xA2 seed
+    return crc32_seeded(data, size, 0xEADA2D49); // seed = CRC32(0xA2) — BT interrupt report-type prefix
 }
 
 inline void fill_output_report_checksum(uint8_t* outputData,size_t len)

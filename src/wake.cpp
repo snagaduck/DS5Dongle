@@ -8,6 +8,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include "utils.h"
 
 #include "tusb.h"
 #include "pico/sync.h"
@@ -85,30 +86,36 @@ extern "C" void tud_resume_cb(void) {
 }
 
 void wake_on_bt_input(const uint8_t *hid_input, uint16_t len) {
-    if (len < 10) return;
-    // DualSense BT 0x31 input report layout (after main.cpp's `data + 3` skip):
-    //   byte 7 low nibble: D-pad direction (0x08 idle); high nibble: face buttons
-    //   byte 8: L1, R1, L2 click, R2 click, share, options, L3, R3
-    //   byte 9: PS (bit 0), touchpad-click (bit 1), mute (bit 2)
-    //
-    // We trigger on ANY change in those three button bytes, not strictly on
-    // the PS bit. Reasons:
-    //   1. The DualSense's BT radio enters a low-power sniff mode after a
-    //      period of inactivity. The PS button alone often does not wake
-    //      the radio out of sniff -- shoulder buttons reliably do. So the
-    //      first BT report after S3 is most likely whichever button the
-    //      user happened to press to wake the radio. PS itself counts as
-    //      "any button" too, so the single-press UX still works.
-    //   2. We additionally call tud_remote_wakeup() speculatively even from
-    //      WAKE_IDLE / WAKE_DONE state. TinyUSB returns true only when the
-    //      host actually USB-suspended the bus; otherwise it's a no-op. This
-    //      protects against the case where tud_suspend_cb didn't fire (e.g.
-    //      a hub between the host and the dongle masking the suspend signal
-    //      from downstream). On success the FSM transitions to REQUESTED and
-    //      proceeds with the keystroke as normal.
-    const uint8_t b7 = hid_input[7];
-    const uint8_t b8 = hid_input[8];
-    const uint8_t b9 = hid_input[9];
+    if (len < static_cast<uint16_t>(sizeof(USBGetStateData))) return;
+    const auto *s = reinterpret_cast<const USBGetStateData *>(hid_input);
+
+    // We trigger on ANY change in the D-pad/face/shoulder/PS/touchpad/mute
+    // button bytes, not strictly the PS bit. Reasons:
+    //   1. The DualSense BT radio enters low-power sniff after inactivity.
+    //      The PS button alone often does not wake it — shoulder buttons
+    //      reliably do. The first BT report after S3 is whichever button
+    //      the user pressed. PS itself counts as "any button" too.
+    //   2. tud_remote_wakeup() is also called speculatively from WAKE_IDLE /
+    //      WAKE_DONE. TinyUSB returns true only when the host actually
+    //      USB-suspended the bus; otherwise it is a no-op. This covers hubs
+    //      that mask the suspend signal from downstream devices.
+
+    // Pack the three button bytes the same way the idle sentinel is stored.
+    const uint8_t b7 = static_cast<uint8_t>(
+        (static_cast<uint8_t>(s->DPad))
+        | (s->ButtonSquare   << 4)
+        | (s->ButtonCross    << 5)
+        | (s->ButtonCircle   << 6)
+        | (s->ButtonTriangle << 7));
+    const uint8_t b8 = static_cast<uint8_t>(
+        s->ButtonL1 | (s->ButtonR1 << 1) | (s->ButtonL2 << 2) | (s->ButtonR2 << 3)
+        | (s->ButtonCreate << 4) | (s->ButtonOptions << 5)
+        | (s->ButtonL3 << 6)    | (s->ButtonR3 << 7));
+    const uint8_t b9 = static_cast<uint8_t>(
+        s->ButtonHome | (s->ButtonPad << 1) | (s->ButtonMute << 2)
+        | (s->UNK1 << 3)
+        | (s->ButtonLeftFunction  << 4) | (s->ButtonRightFunction << 5)
+        | (s->ButtonLeftPaddle    << 6) | (s->ButtonRightPaddle   << 7));
 
     critical_section_enter_blocking(&wake_cs);
     const bool changed = (b7 != prev_b7) || (b8 != prev_b8) || (b9 != prev_b9);

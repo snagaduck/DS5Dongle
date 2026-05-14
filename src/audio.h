@@ -7,7 +7,9 @@
 
 void audio_init();
 void audio_loop();
+#if !DISABLE_SPEAKER_PROC
 void core1_entry();
+#endif
 void set_headset(bool state);
 
 #endif //DS5_BRIDGE_AUDIO_H
