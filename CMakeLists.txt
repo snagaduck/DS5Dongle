@@ -171,6 +171,7 @@ if(ENABLE_WAKE_HID)
 endif()
 
 option(WAKE_DEBUG "Print wake-FSM transitions to UART (developer use)" OFF)
+
 if(WAKE_DEBUG)
     target_compile_definitions(ds5-bridge PRIVATE
             WAKE_DEBUG
