@@ -250,8 +250,8 @@ struct __attribute__((packed)) USBGetStateData { // 63
 };
 
 struct __attribute__((packed)) SetStateData { // 47
-/* 0.0 */ uint8_t EnableRumbleEmulation        : 1;
-/* 0.1 */ uint8_t UseRumbleNotHaptics           : 1;
+/* 0.0 */ uint8_t EnableRumbleEmulation         : 1; // enable rumble emulation via haptic LRAs; suggest halving strength
+/* 0.1 */ uint8_t UseRumbleNotHaptics           : 1; // 0 = use haptics (modern LRA), 1 = legacy rumble motor emulation
 /* 0.2 */ uint8_t AllowRightTriggerFFB          : 1;
 /* 0.3 */ uint8_t AllowLeftTriggerFFB           : 1;
 /* 0.4 */ uint8_t AllowHeadphoneVolume          : 1;
@@ -261,61 +261,65 @@ struct __attribute__((packed)) SetStateData { // 47
 
 /* 1.0 */ uint8_t AllowMuteLight                : 1;
 /* 1.1 */ uint8_t AllowAudioMute                : 1;
-/* 1.2 */ uint8_t AllowLedColor                 : 1; // Enable RGB LED section
-/* 1.3 */ uint8_t ResetLights                   : 1; // Release LEDs from BT firmware control.
-                                                      // Must be pulsed once after SensorTimestamp
-                                                      // >= 10200000 before AllowLedColor takes effect.
-                                                      // Cannot be applied during the BT pair animation.
+/* 1.2 */ uint8_t AllowLedColor                 : 1; // enable RGB LED section
+/* 1.3 */ uint8_t ResetLights                   : 1; // release LEDs from BT firmware control
+                                                      // must be pulsed once after SensorTimestamp
+                                                      // >= 10200000 before AllowLedColor takes effect;
+                                                      // cannot be applied during the BT pair animation
 /* 1.4 */ uint8_t AllowPlayerIndicators         : 1;
 /* 1.5 */ uint8_t AllowHapticLowPassFilter      : 1;
 /* 1.6 */ uint8_t AllowMotorPowerLevel          : 1;
 /* 1.7 */ uint8_t AllowAudioControl2            : 1;
 
-/*  2 */ uint8_t  RumbleEmulationRight;
-/*  3 */ uint8_t  RumbleEmulationLeft;
-/*  4 */ uint8_t  VolumeHeadphones;
-/*  5 */ uint8_t  VolumeSpeaker;
-/*  6 */ uint8_t  VolumeMic;
+/*  2 */ uint8_t  RumbleEmulationRight;          // emulates light rumble weight (0-255)
+/*  3 */ uint8_t  RumbleEmulationLeft;           // emulates heavy rumble weight (0-255)
+/*  4 */ uint8_t  VolumeHeadphones;              // max 0x7F
+/*  5 */ uint8_t  VolumeSpeaker;                 // PS5 uses range 0x3D-0x64
+/*  6 */ uint8_t  VolumeMic;                     // not linear; max effective ~64; 0 = fully muted (chat only)
 
-/* 7.0 */ uint8_t MicSelect                     : 2;
+/* 7.0 */ uint8_t MicSelect                     : 2; // 0=Auto, 1=Internal Only, 2=External Only
 /* 7.2 */ uint8_t EchoCancelEnable              : 1;
 /* 7.3 */ uint8_t NoiseCancelEnable             : 1;
-/* 7.4 */ uint8_t OutputPathSelect              : 2;
-/* 7.6 */ uint8_t InputPathSelect               : 2;
+/* 7.4 */ uint8_t OutputPathSelect              : 2; // 0=L_R_X, 1=L_L_X, 2=L_L_R, 3=X_X_R
+/* 7.6 */ uint8_t InputPathSelect               : 2; // 0=CHAT_ASR, 1=CHAT_CHAT, 2=ASR_ASR, 3=invalid
 
-/*  8 */ uint8_t  MuteLightMode;
+/*  8 */ uint8_t  MuteLightMode;                 // 0=Off, 1=On, 2=Breathing
 
 /* 9.0 */ uint8_t TouchPowerSave                : 1;
 /* 9.1 */ uint8_t MotionPowerSave               : 1;
-/* 9.2 */ uint8_t HapticPowerSave               : 1;
+/* 9.2 */ uint8_t HapticPowerSave               : 1; // AKA BulletPowerSave
 /* 9.3 */ uint8_t AudioPowerSave                : 1;
-/* 9.4 */ uint8_t MicMuted                      : 1;
-/* 9.5 */ uint8_t SpeakerMuted                  : 1;
-/* 9.6 */ uint8_t HeadphonesMuted               : 1;
-/* 9.7 */ uint8_t Pad0                          : 1;
+/* 9.4 */ uint8_t MicMute                       : 1;
+/* 9.5 */ uint8_t SpeakerMute                   : 1;
+/* 9.6 */ uint8_t HeadphoneMute                 : 1;
+/* 9.7 */ uint8_t HapticMute                    : 1; // AKA BulletMute
 
 /* 10 */ uint8_t  RightTriggerFFB[11];
 /* 21 */ uint8_t  LeftTriggerFFB[11];
-/* 32 */ uint32_t HostTimestamp;
-/* 36 */ uint8_t  MotorPowerLevel;
+/* 32 */ uint32_t HostTimestamp;                 // mirrored back in input reports
 
-/* 37.0 */ uint8_t SpeakerCompPreGain           : 3;
+/* 36.0 */ uint8_t TriggerMotorPowerReduction   : 4; // 0x0-0x7, applied in 12.5% steps
+/* 36.4 */ uint8_t RumbleMotorPowerReduction    : 4; // 0x0-0x7, applied in 12.5% steps
+
+/* 37.0 */ uint8_t SpeakerCompPreGain           : 3; // additional speaker volume boost
 /* 37.3 */ uint8_t BeamformingEnable            : 1;
-/* 37.4 */ uint8_t Pad1                         : 4;
+/* 37.4 */ uint8_t UnkAudioControl2             : 4;
 
-/* 38.0 */ uint8_t AllowLightBrightness         : 1;
-/* 38.1 */ uint8_t AllowColorLightFadeAnimation  : 1;
-/* 38.2 */ uint8_t EnableImprovedRumble         : 1;
-/* 38.3 */ uint8_t Pad2                         : 5;
+/* 38.0 */ uint8_t AllowLightBrightnessChange   : 1;
+/* 38.1 */ uint8_t AllowColorLightFadeAnimation : 1;
+/* 38.2 */ uint8_t EnableImprovedRumbleEmulation: 1; // use instead of EnableRumbleEmulation; no halving needed
+                                                      // requires FW >= 0x0224
+/* 38.3 */ uint8_t Pad0                         : 5;
 
-/* 39 */ uint8_t  HapticLowPassFilter;
-/* 40 */ uint8_t  Pad3;
-/* 41 */ uint8_t  LightFadeAnimation;
-/* 42 */ uint8_t  LightBrightness;
-/* 43 */ uint8_t  PlayerIndicators;
-/* 44 */ uint8_t  LedRed;
-/* 45 */ uint8_t  LedGreen;
-/* 46 */ uint8_t  LedBlue;
+/* 39.0 */ uint8_t HapticLowPassFilter          : 1;
+/* 39.1 */ uint8_t Pad1                         : 7;
+/* 40   */ uint8_t Pad2;
+/* 41   */ uint8_t LightFadeAnimation;           // 0=Nothing, 1=FadeIn, 2=FadeOut
+/* 42   */ uint8_t LightBrightness;             // 0=Bright, 1=Mid, 2=Dim
+/* 43   */ uint8_t PlayerIndicators;            // see gen 0x03/0x04 layout notes in settings.h
+/* 44   */ uint8_t LedRed;
+/* 45   */ uint8_t LedGreen;
+/* 46   */ uint8_t LedBlue;
 };
 static_assert(sizeof(SetStateData) == 47);
 
