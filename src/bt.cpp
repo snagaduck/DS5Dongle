@@ -348,15 +348,15 @@ static void fill_set_state(SetStateData *sd) {
 
 #if DISABLE_SPEAKER_PROC
     sd->AudioPowerSave = 1;
-    sd->SpeakerMuted   = 1;
+    sd->SpeakerMute    = 1;
 #endif
 
-    sd->SpeakerCompPreGain          = BT_SPEAKER_COMP_PREGAIN;
-    sd->BeamformingEnable           = BT_BEAMFORMING;
+    sd->SpeakerCompPreGain           = BT_SPEAKER_COMP_PREGAIN;
+    sd->BeamformingEnable            = BT_BEAMFORMING;
 
-    sd->AllowLightBrightness        = 1;
+    sd->AllowLightBrightnessChange   = 1;
     sd->AllowColorLightFadeAnimation = 1;
-    sd->EnableImprovedRumble        = 1;
+    sd->EnableImprovedRumbleEmulation = 1;
 
     sd->HapticLowPassFilter = 1;
 }
