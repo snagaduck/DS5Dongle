@@ -90,7 +90,11 @@ If your device fails to boot:
 
 ### TinyUSB version
 
-Pico SDK 2.2.0 ships with TinyUSB 0.16, which does not support UAC1 and will cause USB audio enumeration to fail on Windows. Update TinyUSB to 0.20.0 before building:
+Pico SDK 2.2.0 ships with TinyUSB 0.16. Both 0.16 and 0.20 are supported:
+
+**TinyUSB 0.16 (default):** The build system detects the version at configure time and automatically patches `audio_device.c` to allow UAC1 devices. No manual steps required — just run cmake as normal.
+
+**TinyUSB 0.20 (recommended):** Better native UAC1 support; no patching needed. To upgrade:
 
 ```bash
 cd ~/.pico-sdk/sdk/2.2.0/lib/tinyusb
@@ -118,6 +122,7 @@ The `.uf2` file will be in `build/ds5-bridge.uf2`.
 | `ENABLE_BATT_LED` | `ON` | Blink onboard LED when controller battery ≤ 10% |
 | `ENABLE_SERIAL` | `OFF` | Enable USB CDC serial port for debug output |
 | `DISABLE_SPEAKER_PROC` | `OFF` | Disable speaker audio processing (haptics only) |
+| `PICO_W_BUILD` | `OFF` | Build for original Pico W (RP2040); disables audio, reduces clock to 200 MHz |
 | `SYS_CLOCK_KHZ` | `320000` | CPU frequency in kHz |
 
 Example: `cmake .. -DENABLE_WAKE_HID=ON`

@@ -10,7 +10,7 @@
 struct __attribute__((packed)) Config_body {
     float haptics_gain; // [1.0,2.0]
     float speaker_volume; // [-100,0]
-    uint8_t inactive_time; // [10,60] min
+    uint8_t inactive_time; // [5,60] min
     uint8_t disable_inactive_disconnect; // bool: 0 disable,1 enable
     uint8_t disable_pico_led; // bool
     uint8_t polling_rate_mode; // 0: 250Hz, 1: 500Hz, 2: real-time
@@ -26,7 +26,6 @@ struct __attribute__((packed)) Config {
     Config_body body;
 };
 
-void config_default();
 void config_load();
 bool config_save();
 const Config_body& get_config();

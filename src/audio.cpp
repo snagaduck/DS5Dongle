@@ -6,18 +6,18 @@
 #include "bt.h"
 #include "resample.h"
 #include "haptic_filter.h"
-
-__attribute__((weak)) void haptic_filter_process(const int16_t*, int, int, WDL_ResampleSample*, int, int) {}
 #include "tusb.h"
+#include "opus.h"
+#include "utils.h"
+#include "config.h"
+#include "usb.h"
+#include "pico/multicore.h"
+#include "pico/util/queue.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include "opus.h"
-#include "utils.h"
-#include "pico/multicore.h"
-#include "pico/util/queue.h"
-#include "config.h"
-#include "usb.h"
+
+__attribute__((weak)) void haptic_filter_process(const int16_t*, int, int, WDL_ResampleSample*, int, int) {}
 
 #define INPUT_CHANNELS    4
 #define OUTPUT_CHANNELS   2

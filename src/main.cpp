@@ -6,7 +6,6 @@
 #include "bsp/board_api.h"
 #include "bt.h"
 #include "utils.h"
-#include "resample.h"
 #include "audio.h"
 #include "wake.h"
 #include "hardware/clocks.h"
@@ -25,9 +24,6 @@
 // Pico SDK speciifically for waiting on conditions
 #include "pico/critical_section.h"
 
-int reportSeqCounter = 0;
-uint8_t packetCounter = 0;
-
 uint8_t interrupt_in_data[63] = {
     0x7f, 0x7d, 0x7f, 0x7e, 0x00, 0x00, 0xa7,
     0x08, 0x00, 0x00, 0x00, 0x52, 0x43, 0x30, 0x41,
@@ -45,7 +41,6 @@ volatile bool report_dirty = false;
 void interrupt_loop() {
     if (!tud_hid_ready()) return;
 
-    // TODO: Refactor for better code reuse
     if (get_config().polling_rate_mode != 2) {
         if (!tud_hid_report(0x01, interrupt_in_data, 63)) {
             printf("[USBHID] tud_hid_report error\n");
@@ -189,6 +184,7 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
     if (report_id == 0) {
         switch (buffer[0]) {
             case 0x02: {
+                static int reportSeqCounter = 0;
                 uint8_t outputData[78];
                 outputData[0] = 0x31;
                 outputData[1] = (reportSeqCounter & 0x0F) << 4;

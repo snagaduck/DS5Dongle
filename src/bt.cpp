@@ -107,21 +107,6 @@ int bt_init() {
     return 0;
 }
 
-/*int main() {
-    stdio_init_all();
-
-    /*while (!stdio_usb_connected()) {
-        sleep_ms(100);
-    }
-    printf("USB Serial connected!\n");#1#
-
-    bt_init();
-
-    while (1) {
-        sleep_ms(10);
-    }
-}*/
-
 static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) {
     (void) channel;
 
