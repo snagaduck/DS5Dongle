@@ -5,6 +5,8 @@
 #ifndef DS5_BRIDGE_AUDIO_H
 #define DS5_BRIDGE_AUDIO_H
 
+#include <cstdint>
+
 void audio_init();
 void audio_loop();
 #if !DISABLE_SPEAKER_PROC
