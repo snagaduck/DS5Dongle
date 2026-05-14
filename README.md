@@ -137,7 +137,7 @@ An optional 2nd-order Butterworth low-pass filter (300Hz cutoff, −12dB/octave 
 
 To deactivate, rename the file back to `.disabled` and re-run cmake. When inactive the build is identical to the unfiltered version — there is no runtime overhead.
 
-**Using game audio as haptics:** The dongle appears to Windows as a 4-channel audio device. Routing game audio to channels 3/4 (e.g. via VoiceMeeter Banana) will drive the haptic actuators directly from whatever is playing. With the filter enabled, only the bass/impact frequencies reach the controller, which generally feels more natural.
+**Using game audio as haptics:** When the filter is enabled, the firmware automatically reads the speaker audio (channels 1/2) and feeds it through the LPF into the haptic actuators. Whatever is playing through the dongle's audio output will drive the controller haptics — no external routing software required.
 
 ## Wake-on-PS (optional)
 
