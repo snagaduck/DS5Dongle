@@ -15,6 +15,7 @@
 #include "bsp/board_api.h"
 #include "classic/sdp_server.h"
 #include "config.h"
+#include "settings.h"
 #include "pico/util/queue.h"
 
 #define MTU_CONTROL 672
@@ -411,14 +412,14 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                         0x3f, // 63
                         // SetStateData
                         0xfd, 0xff, 0x0, 0x0, // flags2: 0xff adds ResetLights (bit 3) to claim LED from wireless fw
-                        0x7f, 0x7f, // Headphones, Speaker
-                        0xff, 0x9, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+                        BT_VOLUME_HEADPHONES, BT_VOLUME_SPEAKER,
+                        BT_VOLUME_MIC, 0x9, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
                         0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
                         0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
                         0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa,
                         0x7, 0x1, 0x0, 0x2, 0x1, // SD[39]=0x1: HapticLowPassFilter enable
                         0x00,
-                        0xff, 0xd7, 0x00 // RGB LED: R, G, B (Nijika Yellow #FFD700)
+                        BT_LED_R, BT_LED_G, BT_LED_B
                     };
                     memcpy(report32 + 2, packet_0x10, sizeof(packet_0x10));
                     bt_write(report32, sizeof(report32));

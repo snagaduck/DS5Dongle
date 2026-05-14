@@ -3,6 +3,7 @@
 //
 
 #include "config.h"
+#include "settings.h"
 
 #include <cmath>
 #include <cstring>
@@ -48,35 +49,35 @@ void config_valid() {
     }
     auto body = &config.body;
     if (std::isnan(body->haptics_gain) || body->haptics_gain < 1.0f || body->haptics_gain > 2.0f) {
-        body->haptics_gain = 1.0f;
+        body->haptics_gain = DEFAULT_HAPTICS_GAIN;
         printf("[Config] Haptics Gain value is invalid\n");
     }
     if (std::isnan(body->speaker_volume) || body->speaker_volume < -100 || body->speaker_volume > 0) {
-        body->speaker_volume = -100;
+        body->speaker_volume = DEFAULT_SPEAKER_VOLUME;
         printf("[Config] Speaker Volume is invalid\n");
     }
     if (body->inactive_time < 5 || body->inactive_time > 60) {
-        body->inactive_time = 30;
+        body->inactive_time = DEFAULT_INACTIVE_TIME;
         printf("[Config] Inactive time is invalid\n");
     }
     if (body->disable_inactive_disconnect > 1) {
-        body->disable_inactive_disconnect = 0;
+        body->disable_inactive_disconnect = DEFAULT_DISABLE_DISCONNECT;
         printf("[Config] disable_auto_disconnect is invalid\n");
     }
     if (body->disable_pico_led > 1) {
-        body->disable_pico_led = 0;
+        body->disable_pico_led = DEFAULT_DISABLE_PICO_LED;
         printf("[Config] disable_pico_led is invalid\n");
     }
     if (body->polling_rate_mode > 2) {
-        body->polling_rate_mode = 0;
+        body->polling_rate_mode = DEFAULT_POLLING_RATE;
         printf("[Config] polling_rate_mode is invalid\n");
     }
     if (body->audio_buffer_length < 16 || body->audio_buffer_length > 128) {
-        body->audio_buffer_length = 64;
+        body->audio_buffer_length = DEFAULT_AUDIO_BUFFER;
         printf("[Config] haptics_buffer_length is invalid\n");
     }
     if (body->controller_mode > 2) {
-        body->controller_mode = 2;
+        body->controller_mode = DEFAULT_CONTROLLER_MODE;
         printf("[Config] controller_mode is invalid\n");
     }
 }
