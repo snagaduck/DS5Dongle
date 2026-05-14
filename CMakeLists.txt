@@ -128,6 +128,12 @@ target_compile_definitions(ds5-bridge PRIVATE
         DISABLE_SPEAKER_PROC=${DISABLE_SPEAKER_PROC_VALUE}
 )
 
+# Haptic LPF: rename src/haptic_filter.cpp.disabled -> src/haptic_filter.cpp to activate
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/src/haptic_filter.cpp)
+    message(STATUS "Haptic low-pass filter enabled")
+    target_sources(ds5-bridge PRIVATE src/haptic_filter.cpp)
+endif()
+
 option(ENABLE_WAKE_HID "Wake the Windows host on PS-button press" OFF)
 if(ENABLE_WAKE_HID)
     target_compile_definitions(ds5-bridge PRIVATE

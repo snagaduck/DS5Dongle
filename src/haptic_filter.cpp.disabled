@@ -1,0 +1,41 @@
+// Haptic audio low-pass filter — 2nd-order Butterworth, fc=300Hz @ 48kHz
+//
+// To activate: rename this file to haptic_filter.cpp, then re-run cmake.
+// To deactivate: rename back to haptic_filter.cpp.disabled, then re-run cmake.
+//
+// Why 300Hz: the DualSense LRAs respond most strongly below ~400Hz.
+// High-frequency content (>300Hz) feels like electrical noise rather than
+// haptic sensation. This filter lets bass/impact pass and rolls off mids/highs
+// at -12dB/octave above the cutoff.
+
+#include "haptic_filter.h"
+
+// Biquad coefficients — Butterworth LPF, fc=300Hz, fs=48000Hz, Q=1/√2
+// Computed via Audio EQ Cookbook bilinear transform:
+//   w0    = 2π × 300/48000  = 0.039270 rad/sample
+//   alpha = sin(w0)/(2Q)    = 0.027762
+//   b0    = (1-cos(w0))/2   = 0.000385
+//   a0    = 1+alpha         = 1.027762
+//   a1    = -2cos(w0)       = -1.998458
+//   a2    = 1-alpha         = 0.972238
+static constexpr float B0 =  3.75122e-4f;  // b0/a0
+static constexpr float B1 =  7.50244e-4f;  // b1/a0
+static constexpr float B2 =  3.75122e-4f;  // b2/a0
+static constexpr float A1 = -1.94447f;     // a1/a0
+static constexpr float A2 =  0.94597f;     // a2/a0
+
+struct BiquadState { float x1, x2, y1, y2; };
+static BiquadState states[2]; // one state per channel (L, R)
+
+void haptic_filter_process(WDL_ResampleSample* buf, int nframes, int nch) {
+    for (int ch = 0; ch < nch && ch < 2; ch++) {
+        BiquadState& s = states[ch];
+        for (int i = 0; i < nframes; i++) {
+            float x = (float)buf[i * nch + ch];
+            float y = B0*x + B1*s.x1 + B2*s.x2 - A1*s.y1 - A2*s.y2;
+            s.x2 = s.x1; s.x1 = x;
+            s.y2 = s.y1; s.y1 = y;
+            buf[i * nch + ch] = (WDL_ResampleSample)y;
+        }
+    }
+}

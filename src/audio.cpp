@@ -5,6 +5,9 @@
 #include "audio.h"
 #include "bt.h"
 #include "resample.h"
+#include "haptic_filter.h"
+
+__attribute__((weak)) void haptic_filter_process(WDL_ResampleSample*, int, int) {}
 #include "tusb.h"
 #include <algorithm>
 #include <cmath>
@@ -94,6 +97,8 @@ void audio_loop() {
         in_buf[i * 2 + 1] = static_cast<WDL_ResampleSample>(clamp(raw[i * INPUT_CHANNELS + 3] / 32768.0f * haptics_gain,
                                                                   -1.0f, 1.0f));
     }
+
+    haptic_filter_process(in_buf, nframes, OUTPUT_CHANNELS);
 
     // 3. 48kHz -> 3kHz 重采样
     static WDL_ResampleSample out_buf[SAMPLE_SIZE]; // 64 floats = 32帧 × 2ch
