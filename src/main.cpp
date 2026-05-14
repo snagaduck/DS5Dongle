@@ -21,7 +21,7 @@
 #include "battery_led.h"
 #endif
 
-// Pico SDK speciifically for waiting on conditions
+// Pico SDK specifically for waiting on conditions
 #include "pico/critical_section.h"
 
 uint8_t interrupt_in_data[63] = {
@@ -36,7 +36,7 @@ uint8_t interrupt_in_data[63] = {
 };
 
 critical_section_t report_cs;
-volatile bool report_dirty = false;
+volatile bool report_pending = false;
 
 void interrupt_loop() {
     if (!tud_hid_ready()) return;
@@ -54,9 +54,9 @@ void interrupt_loop() {
 
 
     critical_section_enter_blocking(&report_cs);
-    if (report_dirty) {
+    if (report_pending) {
         memcpy(safe_report, interrupt_in_data, 63);
-        report_dirty = false;
+        report_pending = false;
         should_send = true;
     }
     critical_section_exit(&report_cs);
@@ -69,7 +69,7 @@ void interrupt_loop() {
             // If the report failed to queue, restore the dirty flag 
             // so we try again on the next loop iteration.
             critical_section_enter_blocking(&report_cs);
-            report_dirty = true;
+            report_pending = true;
             critical_section_exit(&report_cs);
         }
     }
@@ -91,23 +91,17 @@ void on_bt_data(CHANNEL_TYPE channel, uint8_t *data, uint16_t len) {
         if (get_config().polling_rate_mode != 2) {
             memcpy(interrupt_in_data, data + 3, 63);
 #if ENABLE_BATT_LED
-            battery_led_note_report();
+            battery_led_note_report(data[55]); // data[3+52] = interrupt_in_data[52] (power state/percent)
 #endif
             return;
         }
 
-        // We add the critical section here to avoid any race conditions when writing to the interrupt_in_data buffer,
-        // which is shared between the main loop and this callback.
-        // The critical section ensures that only one thread can access the buffer at a time,
-        // preventing data corruption and ensuring thread safety.
-        // We also set the report_dirty flag to true to indicate that new data is available
-        //  and needs to be sent in the next interrupt report.
         critical_section_enter_blocking(&report_cs);
         memcpy(interrupt_in_data, data + 3, 63);
-        report_dirty = true;
+        report_pending = true;
         critical_section_exit(&report_cs);
 #if ENABLE_BATT_LED
-        battery_led_note_report();
+        battery_led_note_report(data[55]); // BT report byte 55 = interrupt_in_data[52] (power state/percent)
 #endif
     }
 }
@@ -274,6 +268,7 @@ int main() {
 #endif
         cyw43_arch_poll();
         tud_task();
+        cmd_task();
         wake_task();
         audio_loop();
         interrupt_loop();

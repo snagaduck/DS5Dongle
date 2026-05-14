@@ -11,4 +11,7 @@ bool is_pico_cmd(uint8_t report_id);
 uint16_t pico_cmd_get(uint8_t report_id, uint8_t *buffer,uint16_t reqlen);
 void pico_cmd_set(uint8_t report_id, uint8_t const *buffer,uint16_t bufsize);
 
+// Call once per main-loop iteration to process deferred commands.
+void cmd_task();
+
 #endif //DS5_BRIDGE_CMD_H

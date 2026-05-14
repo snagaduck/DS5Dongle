@@ -12,6 +12,9 @@
 #include "device/usbd.h"
 #include "pico/time.h"
 
+static absolute_time_t reconnect_at = 0;
+static bool reconnect_pending = false;
+
 bool is_pico_cmd(uint8_t report_id) {
     if (report_id == 0xf6 ||
         report_id == 0xf7
@@ -34,6 +37,13 @@ uint16_t pico_cmd_get(uint8_t report_id, uint8_t *buffer, uint16_t reqlen) {
     return 0;
 }
 
+void cmd_task() {
+    if (reconnect_pending && time_reached(reconnect_at)) {
+        reconnect_pending = false;
+        tud_connect();
+    }
+}
+
 void pico_cmd_set(uint8_t report_id, uint8_t const *buffer, uint16_t bufsize) {
     (void) report_id;
     if (bufsize == 0) {
@@ -54,7 +64,7 @@ void pico_cmd_set(uint8_t report_id, uint8_t const *buffer, uint16_t bufsize) {
     if (buffer[0] == 0x03) {
         printf("[CMD] Enter tud reconnect func\n");
         tud_disconnect();
-        sleep_ms(150);
-        tud_connect();
+        reconnect_at = make_timeout_time_ms(150);
+        reconnect_pending = true;
     }
 }
