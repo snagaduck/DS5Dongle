@@ -320,7 +320,7 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
 
 // Populate the fields common to both the connect init packet and the LED claim packet.
 static void fill_set_state(SetStateData *sd) {
-    sd->EnableRumbleEmulation     = 1;
+    sd->EnableRumbleEmulation     = 0; // superseded by EnableImprovedRumbleEmulation below
     sd->UseRumbleNotHaptics       = 0;
     sd->AllowRightTriggerFFB      = 1;
     sd->AllowLeftTriggerFFB       = 1;
