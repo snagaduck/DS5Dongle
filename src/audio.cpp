@@ -85,6 +85,9 @@ void audio_loop() {
             if (queue_is_full(&audio_fifo)) {
                 static audio_raw_element discard{};
                 queue_try_remove(&audio_fifo, &discard);
+                static uint32_t drop_count = 0;
+                if ((++drop_count % 500) == 1)
+                    printf("[Audio] Warning: FIFO overflow (total drops: %lu)\n", drop_count);
             }
             if (!queue_try_add(&audio_fifo, &element)) {
                 printf("[Audio] Warning: audio_fifo add failed\n");
