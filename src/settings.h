@@ -23,9 +23,9 @@ constexpr uint8_t DEFAULT_CONTROLLER_MODE    = 2;       // 0=DS5, 1=DSE, 2=Auto
 
 // ─── BT init: lightbar ─────────────────────────────────────────────────────
 // RGB color applied to the controller lightbar on every BT connect (0x00–0xFF each).
-constexpr uint8_t BT_LED_R = 0xFF;
-constexpr uint8_t BT_LED_G = 0xD7;
-constexpr uint8_t BT_LED_B = 0x00; // #FFD700 Nijika Yellow
+constexpr uint8_t BT_LED_R = 0x00;
+constexpr uint8_t BT_LED_G = 0x40;
+constexpr uint8_t BT_LED_B = 0xFF; // #0040FF Blue
 
 // Animation played when the LED color is applied on connect:
 //   0 = Nothing  (instant, color appears immediately)
