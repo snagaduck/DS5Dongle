@@ -20,7 +20,8 @@ constexpr uint8_t DEFAULT_DISABLE_PICO_LED   = 0;       // 0 = Pico LED on when 
 constexpr uint8_t DEFAULT_POLLING_RATE       = 0;       // 0=250Hz, 1=500Hz, 2=real-time
 constexpr uint8_t DEFAULT_AUDIO_BUFFER       = 64;      // [16, 128] haptic buffer length
 constexpr uint8_t DEFAULT_CONTROLLER_MODE    = 2;       // 0=DS5, 1=DSE, 2=Auto
-constexpr uint8_t DEFAULT_HAPTIC_YIELD_RUMBLE = 1;     // 1=mute audio haptics while game rumble is active
+constexpr uint8_t DEFAULT_HAPTIC_YIELD_RUMBLE     = 1; // 1=mute audio haptics while game rumble is active
+constexpr uint8_t DEFAULT_HAPTIC_SILENCE_THRESHOLD = 1; // ±1/127 (~0.8%) gate; 0=disabled, higher=more aggressive
 
 // ─── BT init: lightbar ─────────────────────────────────────────────────────
 // RGB color applied to the controller lightbar on every BT connect (0x00–0xFF each).

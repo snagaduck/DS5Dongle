@@ -136,9 +136,10 @@ void audio_loop() {
         // DISABLE_SPEAKER_PROC: drop the packet so controller-native haptics fire.
         // Full build: send with haptic length = 0 so the controller skips the
         // haptic payload but still receives the Opus speaker audio.
-        bool haptic_silent = true;
+        const int8_t silence_thr = static_cast<int8_t>(get_config().haptic_silence_threshold);
+        bool haptic_silent = silence_thr > 0;
         for (int j = 0; j < SAMPLE_SIZE && haptic_silent; j++)
-            haptic_silent = (haptic_buf[j] >= -1 && haptic_buf[j] <= 1);
+            haptic_silent = (haptic_buf[j] >= -silence_thr && haptic_buf[j] <= silence_thr);
 
         const bool rumble_muting = get_config().haptic_yield_to_rumble &&
                                    !time_reached(rumble_mute_until);

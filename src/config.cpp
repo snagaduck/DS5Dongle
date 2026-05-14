@@ -81,6 +81,10 @@ void config_valid() {
         body->haptic_yield_to_rumble = DEFAULT_HAPTIC_YIELD_RUMBLE;
         printf("[Config] haptic_yield_to_rumble is invalid\n");
     }
+    if (body->haptic_silence_threshold > 10) {
+        body->haptic_silence_threshold = DEFAULT_HAPTIC_SILENCE_THRESHOLD;
+        printf("[Config] haptic_silence_threshold is invalid\n");
+    }
 }
 
 void config_load() {
