@@ -26,6 +26,7 @@
 #include "bsp/board_api.h"
 #include "tusb.h"
 #include "config.h"
+#include "bt.h"
 
 #ifndef ENABLE_SERIAL
 #define ENABLE_SERIAL 0
@@ -33,7 +34,7 @@
 
 bool ds_mode() {
     if (get_config().controller_mode == 2) {
-        return !is_dse;
+        return !bt_is_dse();
     }
     return get_config().controller_mode == 0;
 }

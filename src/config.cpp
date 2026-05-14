@@ -17,7 +17,6 @@ constexpr uint32_t CONFIG_MAGIC = 0x66ccff00;
 constexpr uint16_t CONFIG_VERSION = 1;
 constexpr uint32_t CONFIG_FLASH_OFFSET = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 static Config config{};
-bool is_dse = false;
 
 // 编译期保护
 // 判断Config结构体是否能放进flash 256bytes
@@ -84,6 +83,17 @@ void config_valid() {
 
 void config_load() {
     memcpy(&config, flash_config(), sizeof(Config));
+
+    if (config.magic == CONFIG_MAGIC && config.version == CONFIG_VERSION &&
+        config.size == sizeof(Config_body)) {
+        const uint32_t stored_crc = config.crc32;
+        const uint32_t actual_crc = calc_config_crc(config);
+        if (stored_crc != actual_crc) {
+            printf("[Config] CRC mismatch (stored 0x%08X, actual 0x%08X) — resetting to defaults\n",
+                   stored_crc, actual_crc);
+            config = {};
+        }
+    }
 
     config_valid();
 }
