@@ -361,15 +361,32 @@ static void fill_set_state(SetStateData *sd) {
     sd->HapticLowPassFilter = 1;
 }
 
+// Re-assert the configured LED color in sd if the LED has already been claimed.
+// Any 0x32 packet sent after LED claim must include AllowLedColor=1 + the correct
+// RGB values, otherwise the controller resets the lightbar to black even when
+// AllowLedColor=0 (the spec says ignore, but the controller does not).
+static void fill_led_if_claimed(SetStateData *sd) {
+    if (!led_claimed) return;
+    sd->AllowLedColor = 1;
+    sd->LedRed   = is_dse ? BT_DSE_LED_R : BT_DS5_LED_R;
+    sd->LedGreen = is_dse ? BT_DSE_LED_G : BT_DS5_LED_G;
+    sd->LedBlue  = is_dse ? BT_DSE_LED_B : BT_DS5_LED_B;
+}
+
 // Sent on connect: audio/rumble/mic settings only.
 // LED control is deferred until after the BT pair animation (see send_bt_led).
+// In auto-detect mode this is also called a second time when the 0x70 DSE-detection
+// response arrives, which can happen after send_bt_led() has already claimed the LED.
+// fill_led_if_claimed() re-asserts the color so the second call doesn't kill the lightbar.
 static void send_bt_init() {
     uint8_t report32[142]{};
     report32[0] = 0x32;
     report32[1] = 0x10;
     report32[2] = 0x90; // preamble (purpose unknown)
     report32[3] = 0x3f;
-    fill_set_state(reinterpret_cast<SetStateData *>(report32 + 4));
+    auto *sd = reinterpret_cast<SetStateData *>(report32 + 4);
+    fill_set_state(sd);
+    fill_led_if_claimed(sd);
     bt_write(report32, sizeof(report32));
 }
 
@@ -671,18 +688,6 @@ void init_feature() {
 
 bool bt_is_dse() {
     return is_dse;
-}
-
-// Re-assert the configured LED color in sd if the LED has already been claimed.
-// Any 0x32 packet sent after LED claim must include AllowLedColor=1 + the correct
-// RGB values, otherwise the controller resets the lightbar to black even when
-// AllowLedColor=0 (the spec says ignore, but the controller does not).
-static void fill_led_if_claimed(SetStateData *sd) {
-    if (!led_claimed) return;
-    sd->AllowLedColor = 1;
-    sd->LedRed   = is_dse ? BT_DSE_LED_R : BT_DS5_LED_R;
-    sd->LedGreen = is_dse ? BT_DSE_LED_G : BT_DS5_LED_G;
-    sd->LedBlue  = is_dse ? BT_DSE_LED_B : BT_DS5_LED_B;
 }
 
 void bt_update_mute_light(bool muted) {
