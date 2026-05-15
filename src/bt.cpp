@@ -672,3 +672,27 @@ void init_feature() {
 bool bt_is_dse() {
     return is_dse;
 }
+
+void bt_update_mute_light(bool muted) {
+    uint8_t report32[142]{};
+    report32[0] = 0x32;
+    report32[1] = 0x10;
+    report32[2] = 0x90;
+    report32[3] = 0x3f;
+    auto *sd = reinterpret_cast<SetStateData *>(report32 + 4);
+    sd->AllowMuteLight = 1;
+    sd->MuteLightMode  = muted ? 1u : 0u; // 1=On, 0=Off
+    bt_write(report32, sizeof(report32));
+}
+
+void bt_update_output_path(bool headset_plugged) {
+    uint8_t report32[142]{};
+    report32[0] = 0x32;
+    report32[1] = 0x10;
+    report32[2] = 0x90;
+    report32[3] = 0x3f;
+    auto *sd = reinterpret_cast<SetStateData *>(report32 + 4);
+    sd->AllowAudioControl = 1;
+    sd->OutputPathSelect  = headset_plugged ? 0u : 3u; // 0=L_R_X (headset stereo), 3=X_X_R (speaker)
+    bt_write(report32, sizeof(report32));
+}
