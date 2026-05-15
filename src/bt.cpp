@@ -697,10 +697,9 @@ void bt_update_mute_light(bool muted) {
     report32[2] = 0x90;
     report32[3] = 0x3f;
     auto *sd = reinterpret_cast<SetStateData *>(report32 + 4);
-    fill_set_state(sd);
-    fill_led_if_claimed(sd);
     sd->AllowMuteLight = 1;
     sd->MuteLightMode  = muted ? 1u : 0u; // 1=On, 0=Off
+    fill_led_if_claimed(sd);
     bt_write(report32, sizeof(report32));
 }
 
@@ -711,9 +710,8 @@ void bt_update_output_path(bool headset_plugged) {
     report32[2] = 0x90;
     report32[3] = 0x3f;
     auto *sd = reinterpret_cast<SetStateData *>(report32 + 4);
-    fill_set_state(sd);
-    fill_led_if_claimed(sd);
     sd->AllowAudioControl = 1;
     sd->OutputPathSelect  = headset_plugged ? 0u : 3u; // 0=L_R_X (headset stereo), 3=X_X_R (speaker)
+    fill_led_if_claimed(sd);
     bt_write(report32, sizeof(report32));
 }
