@@ -673,6 +673,18 @@ bool bt_is_dse() {
     return is_dse;
 }
 
+// Re-assert the configured LED color in sd if the LED has already been claimed.
+// Any 0x32 packet sent after LED claim must include AllowLedColor=1 + the correct
+// RGB values, otherwise the controller resets the lightbar to black even when
+// AllowLedColor=0 (the spec says ignore, but the controller does not).
+static void fill_led_if_claimed(SetStateData *sd) {
+    if (!led_claimed) return;
+    sd->AllowLedColor = 1;
+    sd->LedRed   = is_dse ? BT_DSE_LED_R : BT_DS5_LED_R;
+    sd->LedGreen = is_dse ? BT_DSE_LED_G : BT_DS5_LED_G;
+    sd->LedBlue  = is_dse ? BT_DSE_LED_B : BT_DS5_LED_B;
+}
+
 void bt_update_mute_light(bool muted) {
     uint8_t report32[142]{};
     report32[0] = 0x32;
@@ -680,6 +692,8 @@ void bt_update_mute_light(bool muted) {
     report32[2] = 0x90;
     report32[3] = 0x3f;
     auto *sd = reinterpret_cast<SetStateData *>(report32 + 4);
+    fill_set_state(sd);
+    fill_led_if_claimed(sd);
     sd->AllowMuteLight = 1;
     sd->MuteLightMode  = muted ? 1u : 0u; // 1=On, 0=Off
     bt_write(report32, sizeof(report32));
@@ -692,6 +706,8 @@ void bt_update_output_path(bool headset_plugged) {
     report32[2] = 0x90;
     report32[3] = 0x3f;
     auto *sd = reinterpret_cast<SetStateData *>(report32 + 4);
+    fill_set_state(sd);
+    fill_led_if_claimed(sd);
     sd->AllowAudioControl = 1;
     sd->OutputPathSelect  = headset_plugged ? 0u : 3u; // 0=L_R_X (headset stereo), 3=X_X_R (speaker)
     bt_write(report32, sizeof(report32));
