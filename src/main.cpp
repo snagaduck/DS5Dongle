@@ -79,11 +79,33 @@ void interrupt_loop() {
 }
 
 void on_bt_data(CHANNEL_TYPE channel, uint8_t *data, uint16_t len) {
+    // BT 0x01 simplified input: brief window before controller switches to 0x31 mode.
+    // Map available fields so the USB report isn't stale during connection.
+    if (channel == INTERRUPT && data[1] == 0x01 && len >= 11) {
+        const uint8_t *s = data + 2; // BTSimpleGetStateData
+        interrupt_in_data[0] = s[0]; // LeftStickX
+        interrupt_in_data[1] = s[1]; // LeftStickY
+        interrupt_in_data[2] = s[2]; // RightStickX
+        interrupt_in_data[3] = s[3]; // RightStickY
+        interrupt_in_data[4] = s[7]; // TriggerLeft
+        interrupt_in_data[5] = s[8]; // TriggerRight
+        interrupt_in_data[7] = s[4]; // DPad + face buttons (same layout)
+        interrupt_in_data[8] = s[5]; // shoulder/action buttons (same layout)
+        // BTSimple byte6: bit1=ButtonHome, bit2=ButtonPad → USB byte9: bit0=ButtonHome, bit1=ButtonPad
+        interrupt_in_data[9] = (interrupt_in_data[9] & 0xFC) | ((s[6] >> 1) & 0x03);
+        return;
+    }
+
     if (channel == INTERRUPT && data[1] == 0x31) {
         const auto *state = reinterpret_cast<const USBGetStateData *>(data + 3);
 
         if (state->PluggedHeadphones != (interrupt_in_data[53] & 1)) {
             set_headset(state->PluggedHeadphones);
+            bt_update_output_path(state->PluggedHeadphones);
+        }
+
+        if (state->MicMuted != ((interrupt_in_data[53] >> 2) & 1)) {
+            bt_update_mute_light(state->MicMuted);
         }
 
         // Wake-on-PS must observe every BT input report regardless of polling
@@ -200,7 +222,8 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
             }
         }
     }
-    if (report_id == 0x80 ||
+    if (report_id == 0x21 || // Set Audio Control — proxy volume/mic commands to BT
+        report_id == 0x80 ||
         // DSE: Write Profile Block
         report_id == 0x60 ||
         report_id == 0x62 ||

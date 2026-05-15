@@ -27,4 +27,10 @@ void set_feature_data(uint8_t reportId, uint8_t* data,uint16_t len);
 // Returns true when the connected controller is a DualSense Edge (DSE).
 bool bt_is_dse();
 
+// Send a minimal 0x32 update to change the amber mute indicator LED.
+void bt_update_mute_light(bool muted);
+
+// Send a minimal 0x32 update to change the controller audio output path.
+void bt_update_output_path(bool headset_plugged);
+
 #endif //DS5_BRIDGE_BT_H
